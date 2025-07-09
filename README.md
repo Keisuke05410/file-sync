@@ -14,6 +14,7 @@ This tool allows developers to share configuration files (like docker-compose.ym
 - 🏗️ **Dry Run Support**: Preview changes before applying them
 - ⚙️ **Flexible Configuration**: JSON-based configuration with sensible defaults
 - 🎯 **Source Worktree**: Designate any worktree as the source of truth
+- 🧠 **Intelligent Unlink**: Smart removal of symlinks based on execution context
 - 🛠️ **Maintenance Commands**: Status checking and broken link cleanup
 
 ## Installation
@@ -118,8 +119,28 @@ npx sync-worktrees init
 # Check synchronization status
 npx sync-worktrees status
 
+# Remove symbolic links (intelligent mode detection)
+npx sync-worktrees unlink
+
 # Clean broken symbolic links
 npx sync-worktrees clean
+```
+
+#### Unlink Command Behavior
+
+The `unlink` command intelligently determines what to remove based on where it's executed:
+
+- **When run from source worktree**: Removes all symbolic links from all target worktrees
+- **When run from target worktree**: Removes symbolic links only from the current worktree
+
+```bash
+# Example: Remove all symlinks (run from main worktree)
+cd /projects/myapp
+npx sync-worktrees unlink
+
+# Example: Remove only current worktree's symlinks (run from feature worktree)
+cd /projects/myapp-feature
+npx sync-worktrees unlink
 ```
 
 ### Command Options

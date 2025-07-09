@@ -8,12 +8,12 @@ This is a CLI tool project for synchronizing files between Git worktrees. The to
 
 ## Project Status
 
-**PRODUCTION READY** - The project is fully implemented with comprehensive testing (266 tests passing), robust error handling, and complete CLI functionality. Ready for real-world usage.
+**PRODUCTION READY** - The project is fully implemented with comprehensive testing (331 tests passing), robust error handling, and complete CLI functionality. Ready for real-world usage.
 
 ## Core Architecture
 
 ### Key Components
-- **CLI System** (`src/cli.ts`): Commander.js-based CLI with 4 main commands (sync, init, status, clean)
+- **CLI System** (`src/cli.ts`): Commander.js-based CLI with 5 main commands (sync, init, status, unlink, clean)
 - **Configuration System** (`src/config/`): Zod-based schema validation with comprehensive error handling
 - **Git Integration** (`src/git/`): Repository detection and worktree discovery using Git commands
 - **Sync Engine** (`src/sync/`): Orchestrates planning, execution, and validation of sync operations
@@ -24,7 +24,7 @@ This is a CLI tool project for synchronizing files between Git worktrees. The to
 - **Language**: TypeScript with strict mode and Node.js 18.x+
 - **CLI Framework**: Commander.js for command parsing and argument handling
 - **Validation**: Zod for schema validation and type safety
-- **Testing**: Vitest with coverage reporting (266 tests)
+- **Testing**: Vitest with coverage reporting (331 tests)
 - **Build**: TypeScript compiler with ES modules
 - **File Operations**: Native Node.js fs module with async/await patterns
 
@@ -112,6 +112,7 @@ npx sync-worktrees --dry-run # Preview changes without applying
 npx sync-worktrees --verbose # Show detailed output
 npx sync-worktrees init      # Create sample configuration file
 npx sync-worktrees status    # Check synchronization status
+npx sync-worktrees unlink    # Remove symbolic links (intelligent mode)
 npx sync-worktrees clean     # Remove broken symbolic links
 npx sync-worktrees --help    # Show help information
 ```
@@ -151,6 +152,7 @@ npx sync-worktrees --help    # Show help information
 - **Main Command**: `npx sync-worktrees [config-path]` - Sync files across worktrees
 - **Init Command**: `npx sync-worktrees init [config-path]` - Create sample configuration
 - **Status Command**: `npx sync-worktrees status [config-path]` - Check sync status
+- **Unlink Command**: `npx sync-worktrees unlink [config-path]` - Remove symbolic links intelligently
 - **Clean Command**: `npx sync-worktrees clean [config-path]` - Remove broken links
 - **Global Options**: `--dry-run`, `--verbose`, `--quiet`, `--no-color`
 
@@ -179,7 +181,7 @@ git worktree list              # List all worktrees
 
 ## Testing Strategy
 
-- **Framework**: Vitest with comprehensive test suite (266 tests passing)
+- **Framework**: Vitest with comprehensive test suite (331 tests passing)
 - **Unit Tests**: Mock Git commands and file system operations with detailed scenarios
 - **Integration Tests**: Use actual Git worktrees in temporary directories
 - **Test Coverage**: Available via `npm run test:coverage` with detailed reporting
@@ -211,12 +213,13 @@ git worktree list              # List all worktrees
 - **Configuration System**: Zod-based validation with comprehensive error handling
 - **Git Integration**: Repository detection and worktree discovery
 - **Symlink Management**: Relative/absolute link creation with idempotent operations
-- **Testing Suite**: 266 tests covering unit and integration scenarios
+- **Testing Suite**: 331 tests covering unit and integration scenarios
 - **Error Handling**: Robust error system with custom error classes
 - **Logging System**: Configurable logging with colors and progress indicators
 - **Dry-run Support**: Preview functionality across all commands
 - **Hook System**: Pre/post sync command execution
 - **Status Command**: Check current synchronization state
+- **Unlink Command**: Intelligent symbolic link removal based on execution context
 - **Clean Command**: Remove broken symbolic links
 - **Glob Patterns**: Full pattern matching support for file selection
 
@@ -234,3 +237,13 @@ git worktree list              # List all worktrees
 
 - **Commit Practices**:
   - 作業が一区切りついたらその度に適切な粒度でcommitして下さい。
+
+## Quality Assurance
+
+- **Required Verification Before Completion**:
+  - 会話が終わる前に必ず以下のチェックを実行して、すべてが正常に動作することを確認すること：
+    - `npm run build` - TypeScriptビルドが成功すること
+    - `npm test` - 全てのテストが通ること
+    - `npm run lint` - リンターチェックが通ること（可能な場合）
+    - `npm run type-check` - 型チェックが通ること（可能な場合）
+    - その他プロジェクトに必要なコマンドがあれば実行すること
