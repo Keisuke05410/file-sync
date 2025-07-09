@@ -715,6 +715,235 @@ describe('CLI', () => {
     });
   });
 
+  describe('Unlink Command', () => {
+    it('should handle unlink command successfully in source worktree', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['test.txt'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockResult = {
+        unlinked: ['test.txt'],
+        errors: [],
+        mode: 'all' as const
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockUnlinkSymlinks = vi.fn().mockResolvedValue(mockResult);
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: vi.fn(),
+        sync: vi.fn(),
+        getSyncSummary: vi.fn(),
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: mockUnlinkSymlinks
+      }) as any);
+      
+      await cli.handleUnlinkCommand(undefined, { quiet: false, verbose: false, dryRun: false, noColor: false });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockUnlinkSymlinks).toHaveBeenCalledWith(mockConfig, false);
+    });
+
+    it('should handle unlink command successfully in target worktree', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['test.txt'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockResult = {
+        unlinked: ['test.txt'],
+        errors: [],
+        mode: 'current' as const
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockUnlinkSymlinks = vi.fn().mockResolvedValue(mockResult);
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: vi.fn(),
+        sync: vi.fn(),
+        getSyncSummary: vi.fn(),
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: mockUnlinkSymlinks
+      }) as any);
+      
+      await cli.handleUnlinkCommand(undefined, { quiet: false, verbose: false, dryRun: false, noColor: false });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockUnlinkSymlinks).toHaveBeenCalledWith(mockConfig, false);
+    });
+
+    it('should handle unlink command in dry run mode', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['test.txt'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockResult = {
+        unlinked: ['test.txt'],
+        errors: [],
+        mode: 'all' as const
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockUnlinkSymlinks = vi.fn().mockResolvedValue(mockResult);
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: vi.fn(),
+        sync: vi.fn(),
+        getSyncSummary: vi.fn(),
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: mockUnlinkSymlinks
+      }) as any);
+      
+      await cli.handleUnlinkCommand(undefined, { quiet: false, verbose: false, dryRun: true, noColor: false });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockUnlinkSymlinks).toHaveBeenCalledWith(mockConfig, true);
+    });
+
+    it('should handle unlink command with no symlinks found', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['test.txt'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockResult = {
+        unlinked: [],
+        errors: [],
+        mode: 'all' as const
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockUnlinkSymlinks = vi.fn().mockResolvedValue(mockResult);
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: vi.fn(),
+        sync: vi.fn(),
+        getSyncSummary: vi.fn(),
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: mockUnlinkSymlinks
+      }) as any);
+      
+      await cli.handleUnlinkCommand(undefined, { quiet: false, verbose: false, dryRun: false, noColor: false });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockUnlinkSymlinks).toHaveBeenCalledWith(mockConfig, false);
+    });
+
+    it('should handle unlink command with errors', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['test.txt'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockResult = {
+        unlinked: ['test.txt'],
+        errors: [{ file: 'error.txt', worktree: '/repo-feature', error: 'Permission denied' }],
+        mode: 'all' as const
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockUnlinkSymlinks = vi.fn().mockResolvedValue(mockResult);
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: vi.fn(),
+        sync: vi.fn(),
+        getSyncSummary: vi.fn(),
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: mockUnlinkSymlinks
+      }) as any);
+      
+      await cli.handleUnlinkCommand(undefined, { quiet: false, verbose: false, dryRun: false, noColor: false });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockUnlinkSymlinks).toHaveBeenCalledWith(mockConfig, false);
+    });
+
+    it('should handle unlink command errors', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: vi.fn().mockRejectedValue(new Error('Config error')),
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      await expect(async () => {
+        await cli.handleUnlinkCommand(undefined, { quiet: false, verbose: false, dryRun: false, noColor: false });
+      }).rejects.toThrow('process.exit called');
+      
+      expect(mockProcessExit).toHaveBeenCalledWith(1);
+    });
+  });
+
   describe('Run Method', () => {
     it('should run CLI successfully', async () => {
       const cli = new CLI();

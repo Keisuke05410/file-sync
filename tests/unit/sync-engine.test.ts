@@ -469,6 +469,268 @@ describe('SyncEngine', () => {
     });
   });
 
+  describe('unlinkSymlinks', () => {
+    it('should unlink all symlinks when running from source worktree', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: [
+          {
+            targetWorktree: '/repo/feature',
+            file: 'docker-compose.yml',
+            sourcePath: '/repo/main/docker-compose.yml',
+            targetPath: '/repo/feature/docker-compose.yml',
+            linkPath: '../main/docker-compose.yml',
+            action: 'create',
+            reason: 'Creating new symlink'
+          }
+        ]
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      vi.spyOn(syncEngine, 'checkStatus').mockResolvedValue({
+        sourceWorktree: '/repo/main',
+        targetWorktrees: ['/repo/feature'],
+        syncedFiles: {
+          '/repo/feature': {
+            valid: ['docker-compose.yml'],
+            broken: [],
+            missing: []
+          }
+        }
+      });
+      
+      const mockRemoveSymlinks = vi.fn().mockResolvedValue({
+        removed: ['docker-compose.yml'],
+        errors: []
+      });
+      mockSymlinkManager.removeSymlinks = mockRemoveSymlinks;
+      
+      // Mock current working directory to be source worktree
+      const mockCwd = vi.spyOn(process, 'cwd').mockReturnValue('/repo/main');
+      
+      const result = await syncEngine.unlinkSymlinks(mockConfig);
+      
+      expect(result.unlinked).toEqual(['docker-compose.yml']);
+      expect(result.errors).toHaveLength(0);
+      expect(result.mode).toBe('all');
+      expect(mockRemoveSymlinks).toHaveBeenCalledWith(
+        mockTargetWorktrees,
+        ['docker-compose.yml'],
+        false
+      );
+      
+      mockCwd.mockRestore();
+    });
+
+    it('should unlink only current worktree symlinks when running from target worktree', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: [
+          {
+            targetWorktree: '/repo/feature',
+            file: 'docker-compose.yml',
+            sourcePath: '/repo/main/docker-compose.yml',
+            targetPath: '/repo/feature/docker-compose.yml',
+            linkPath: '../main/docker-compose.yml',
+            action: 'create',
+            reason: 'Creating new symlink'
+          }
+        ]
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      vi.spyOn(syncEngine, 'checkStatus').mockResolvedValue({
+        sourceWorktree: '/repo/main',
+        targetWorktrees: ['/repo/feature'],
+        syncedFiles: {
+          '/repo/feature': {
+            valid: ['docker-compose.yml'],
+            broken: [],
+            missing: []
+          }
+        }
+      });
+      
+      const mockRemoveSymlinks = vi.fn().mockResolvedValue({
+        removed: ['docker-compose.yml'],
+        errors: []
+      });
+      mockSymlinkManager.removeSymlinks = mockRemoveSymlinks;
+      
+      // Mock current working directory to be target worktree
+      const mockCwd = vi.spyOn(process, 'cwd').mockReturnValue('/repo/feature');
+      
+      const result = await syncEngine.unlinkSymlinks(mockConfig);
+      
+      expect(result.unlinked).toEqual(['docker-compose.yml']);
+      expect(result.errors).toHaveLength(0);
+      expect(result.mode).toBe('current');
+      expect(mockRemoveSymlinks).toHaveBeenCalledWith(
+        [mockTargetWorktrees[0]], // Only current worktree
+        ['docker-compose.yml'],
+        false
+      );
+      
+      mockCwd.mockRestore();
+    });
+
+    it('should handle dry run mode', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: [
+          {
+            targetWorktree: '/repo/feature',
+            file: 'docker-compose.yml',
+            sourcePath: '/repo/main/docker-compose.yml',
+            targetPath: '/repo/feature/docker-compose.yml',
+            linkPath: '../main/docker-compose.yml',
+            action: 'create',
+            reason: 'Creating new symlink'
+          }
+        ]
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      vi.spyOn(syncEngine, 'checkStatus').mockResolvedValue({
+        sourceWorktree: '/repo/main',
+        targetWorktrees: ['/repo/feature'],
+        syncedFiles: {
+          '/repo/feature': {
+            valid: ['docker-compose.yml'],
+            broken: [],
+            missing: []
+          }
+        }
+      });
+      
+      const mockRemoveSymlinks = vi.fn().mockResolvedValue({
+        removed: ['docker-compose.yml'],
+        errors: []
+      });
+      mockSymlinkManager.removeSymlinks = mockRemoveSymlinks;
+      
+      // Mock current working directory to be source worktree
+      const mockCwd = vi.spyOn(process, 'cwd').mockReturnValue('/repo/main');
+      
+      const result = await syncEngine.unlinkSymlinks(mockConfig, true);
+      
+      expect(result.unlinked).toEqual(['docker-compose.yml']);
+      expect(result.errors).toHaveLength(0);
+      expect(result.mode).toBe('all');
+      expect(mockRemoveSymlinks).toHaveBeenCalledWith(
+        mockTargetWorktrees,
+        ['docker-compose.yml'],
+        true // dry run
+      );
+      
+      mockCwd.mockRestore();
+    });
+
+    it('should handle errors during unlink', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: [
+          {
+            targetWorktree: '/repo/feature',
+            file: 'docker-compose.yml',
+            sourcePath: '/repo/main/docker-compose.yml',
+            targetPath: '/repo/feature/docker-compose.yml',
+            linkPath: '../main/docker-compose.yml',
+            action: 'create',
+            reason: 'Creating new symlink'
+          }
+        ]
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      vi.spyOn(syncEngine, 'checkStatus').mockResolvedValue({
+        sourceWorktree: '/repo/main',
+        targetWorktrees: ['/repo/feature'],
+        syncedFiles: {
+          '/repo/feature': {
+            valid: ['docker-compose.yml'],
+            broken: [],
+            missing: []
+          }
+        }
+      });
+      
+      const mockRemoveSymlinks = vi.fn().mockResolvedValue({
+        removed: [],
+        errors: [{
+          file: 'docker-compose.yml',
+          worktree: '/repo/feature',
+          error: 'Permission denied',
+          code: 'EACCES'
+        }]
+      });
+      mockSymlinkManager.removeSymlinks = mockRemoveSymlinks;
+      
+      // Mock current working directory to be source worktree
+      const mockCwd = vi.spyOn(process, 'cwd').mockReturnValue('/repo/main');
+      
+      const result = await syncEngine.unlinkSymlinks(mockConfig);
+      
+      expect(result.unlinked).toEqual([]);
+      expect(result.errors).toHaveLength(1);
+      expect(result.errors[0]).toEqual({
+        file: 'docker-compose.yml',
+        worktree: '/repo/feature',
+        error: 'Permission denied',
+        code: 'EACCES'
+      });
+      
+      mockCwd.mockRestore();
+    });
+
+    it('should handle no symlinks found', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: []
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      vi.spyOn(syncEngine, 'checkStatus').mockResolvedValue({
+        sourceWorktree: '/repo/main',
+        targetWorktrees: ['/repo/feature'],
+        syncedFiles: {
+          '/repo/feature': {
+            valid: [],
+            broken: [],
+            missing: []
+          }
+        }
+      });
+      
+      const mockRemoveSymlinks = vi.fn().mockResolvedValue({
+        removed: [],
+        errors: []
+      });
+      mockSymlinkManager.removeSymlinks = mockRemoveSymlinks;
+      
+      // Mock current working directory to be source worktree
+      const mockCwd = vi.spyOn(process, 'cwd').mockReturnValue('/repo/main');
+      
+      const result = await syncEngine.unlinkSymlinks(mockConfig);
+      
+      expect(result.unlinked).toEqual([]);
+      expect(result.errors).toHaveLength(0);
+      expect(result.mode).toBe('all');
+      expect(mockRemoveSymlinks).toHaveBeenCalledWith(
+        mockTargetWorktrees,
+        [],
+        false
+      );
+      
+      mockCwd.mockRestore();
+    });
+  });
+
   describe('cleanBrokenLinks', () => {
     beforeEach(() => {
       mockJoin.mockImplementation((path, file) => `${path}/${file}`);

@@ -507,6 +507,167 @@ describe('SymlinkManager', () => {
     });
   });
 
+  describe('removeSymlinks', () => {
+    const worktrees: WorktreeInfo[] = [
+      {
+        path: '/worktree1',
+        branch: 'feature1',
+        head: 'abc123',
+        isMain: false
+      },
+      {
+        path: '/worktree2',
+        branch: 'feature2',
+        head: 'def456',
+        isMain: false
+      }
+    ];
+
+    it('should remove symlinks from all worktrees', async () => {
+      const files = ['file1.txt', 'file2.txt'];
+      
+      mockExistsSync.mockImplementation((path: string) => {
+        // All files exist
+        return true;
+      });
+      
+      mockLstatSync.mockImplementation((path: string) => {
+        // All files are symlinks
+        return { isSymbolicLink: () => true } as any;
+      });
+      
+      mockUnlinkSync.mockImplementation(() => {});
+      
+      const result = await symlinkManager.removeSymlinks(worktrees, files);
+      
+      expect(result.removed).toEqual(['file1.txt', 'file2.txt', 'file1.txt', 'file2.txt']);
+      expect(result.errors).toHaveLength(0);
+      
+      // Should be called for each file in each worktree
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(4);
+      expect(mockUnlinkSync).toHaveBeenCalledWith('/worktree1/file1.txt');
+      expect(mockUnlinkSync).toHaveBeenCalledWith('/worktree1/file2.txt');
+      expect(mockUnlinkSync).toHaveBeenCalledWith('/worktree2/file1.txt');
+      expect(mockUnlinkSync).toHaveBeenCalledWith('/worktree2/file2.txt');
+    });
+
+    it('should handle dry run mode', async () => {
+      const files = ['file1.txt'];
+      
+      mockExistsSync.mockReturnValue(true);
+      mockLstatSync.mockReturnValue({ isSymbolicLink: () => true } as any);
+      
+      const result = await symlinkManager.removeSymlinks(worktrees, files, true);
+      
+      expect(result.removed).toEqual(['file1.txt', 'file1.txt']);
+      expect(result.errors).toHaveLength(0);
+      expect(mockUnlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('should skip non-existent files', async () => {
+      const files = ['existing.txt', 'nonexistent.txt'];
+      
+      mockExistsSync.mockImplementation((path: string) => {
+        return !path.includes('nonexistent');
+      });
+      
+      mockLstatSync.mockReturnValue({ isSymbolicLink: () => true } as any);
+      mockUnlinkSync.mockImplementation(() => {});
+      
+      const result = await symlinkManager.removeSymlinks(worktrees, files);
+      
+      expect(result.removed).toEqual(['existing.txt', 'existing.txt']);
+      expect(result.errors).toHaveLength(0);
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
+    });
+
+    it('should skip regular files (not symlinks)', async () => {
+      const files = ['symlink.txt', 'regular.txt'];
+      
+      mockExistsSync.mockReturnValue(true);
+      mockLstatSync.mockImplementation((path: string) => {
+        if (path.includes('regular')) {
+          return { isSymbolicLink: () => false } as any;
+        }
+        return { isSymbolicLink: () => true } as any;
+      });
+      
+      mockUnlinkSync.mockImplementation(() => {});
+      
+      const result = await symlinkManager.removeSymlinks(worktrees, files);
+      
+      expect(result.removed).toEqual(['symlink.txt', 'symlink.txt']);
+      expect(result.errors).toHaveLength(0);
+      expect(mockUnlinkSync).toHaveBeenCalledTimes(2);
+    });
+
+    it('should handle errors during removal', async () => {
+      const files = ['file1.txt', 'file2.txt'];
+      
+      mockExistsSync.mockReturnValue(true);
+      mockLstatSync.mockReturnValue({ isSymbolicLink: () => true } as any);
+      
+      mockUnlinkSync.mockImplementation((path: string) => {
+        if (path.includes('file1')) {
+          throw new Error('Permission denied');
+        }
+      });
+      
+      const result = await symlinkManager.removeSymlinks(worktrees, files);
+      
+      expect(result.removed).toEqual(['file2.txt', 'file2.txt']);
+      expect(result.errors).toHaveLength(2);
+      expect(result.errors[0]).toEqual({
+        file: 'file1.txt',
+        worktree: '/worktree1',
+        error: 'Permission denied',
+        code: 'UNLINK_ERROR'
+      });
+      expect(result.errors[1]).toEqual({
+        file: 'file1.txt',
+        worktree: '/worktree2',
+        error: 'Permission denied',
+        code: 'UNLINK_ERROR'
+      });
+    });
+
+    it('should handle empty worktrees array', async () => {
+      const result = await symlinkManager.removeSymlinks([], ['file.txt']);
+      
+      expect(result.removed).toEqual([]);
+      expect(result.errors).toHaveLength(0);
+      expect(mockUnlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('should handle empty files array', async () => {
+      const result = await symlinkManager.removeSymlinks(worktrees, []);
+      
+      expect(result.removed).toEqual([]);
+      expect(result.errors).toHaveLength(0);
+      expect(mockUnlinkSync).not.toHaveBeenCalled();
+    });
+
+    it('should handle lstat errors', async () => {
+      const files = ['file1.txt'];
+      
+      mockExistsSync.mockReturnValue(true);
+      mockLstatSync.mockImplementation(() => {
+        throw new Error('Permission denied');
+      });
+      
+      const result = await symlinkManager.removeSymlinks(worktrees, files);
+      
+      expect(result.removed).toEqual([]);
+      expect(result.errors).toHaveLength(2);
+      expect(result.errors[0]).toEqual({
+        file: 'file1.txt',
+        worktree: '/worktree1',
+        error: 'Permission denied',
+        code: 'LSTAT_ERROR'
+      });
+    });
+  });
+
   describe('validateSymlinks', () => {
     const worktree: WorktreeInfo = {
       path: '/worktree',
