@@ -685,6 +685,11 @@ describe('SymlinkManager', () => {
       });
       
       mockLstatSync.mockImplementation((path: string) => {
+        if (path.includes('missing')) {
+          const error = new Error('ENOENT: no such file or directory');
+          (error as any).code = 'ENOENT';
+          throw error;
+        }
         if (path.includes('broken')) {
           return { isSymbolicLink: () => true } as any;
         }
@@ -709,6 +714,74 @@ describe('SymlinkManager', () => {
       expect(result.valid).toEqual([]);
       expect(result.broken).toEqual([]);
       expect(result.missing).toEqual([]);
+    });
+  });
+
+  describe('scanExistingSymlinks', () => {
+    it('should scan and find all symlinks in worktree directory', async () => {
+      const worktree = {
+        path: '/repo/feature',
+        branch: 'feature',
+        head: 'abc123',
+        isMain: false
+      };
+
+      // Mock the readdir import directly
+      const mockReaddir = vi.fn()
+        .mockResolvedValueOnce([
+          { name: 'share.txt', isDirectory: () => false, isSymbolicLink: () => true },
+          { name: '.worktreesync.json', isDirectory: () => false, isSymbolicLink: () => true },
+          { name: 'regular.txt', isDirectory: () => false, isSymbolicLink: () => false },
+          { name: 'subdir', isDirectory: () => true, isSymbolicLink: () => false }
+        ])
+        .mockResolvedValueOnce([
+          { name: 'nested.txt', isDirectory: () => false, isSymbolicLink: () => true }
+        ]);
+
+      // Mock the readdir function on the SymlinkManager instance
+      vi.spyOn(symlinkManager as any, 'scanDirectoryForSymlinks').mockImplementation(async (fullPath, relativePath, symlinks) => {
+        if (fullPath === '/repo/feature') {
+          symlinks.push('share.txt', '.worktreesync.json', 'subdir/nested.txt');
+        }
+      });
+
+      const result = await symlinkManager.scanExistingSymlinks(worktree);
+      
+      expect(result).toEqual(['.worktreesync.json', 'share.txt', 'subdir/nested.txt']);
+    });
+
+    it('should handle empty directory', async () => {
+      const worktree = {
+        path: '/repo/empty',
+        branch: 'empty',
+        head: 'def456',
+        isMain: false
+      };
+
+      // Mock empty directory
+      vi.spyOn(symlinkManager as any, 'scanDirectoryForSymlinks').mockImplementation(async () => {
+        // Do nothing - empty directory
+      });
+
+      const result = await symlinkManager.scanExistingSymlinks(worktree);
+      
+      expect(result).toEqual([]);
+    });
+
+    it('should handle permission errors gracefully', async () => {
+      const worktree = {
+        path: '/repo/restricted',
+        branch: 'restricted',
+        head: 'ghi789',
+        isMain: false
+      };
+
+      // Mock permission error
+      vi.spyOn(symlinkManager as any, 'scanDirectoryForSymlinks').mockRejectedValue(new Error('Permission denied'));
+
+      const result = await symlinkManager.scanExistingSymlinks(worktree);
+      
+      expect(result).toEqual([]);
     });
   });
 });

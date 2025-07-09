@@ -50,7 +50,8 @@ const mockPlanner = {
 const mockSymlinkManager = {
   executeAction: vi.fn(),
   validateSymlinks: vi.fn(),
-  removeSymlinks: vi.fn()
+  removeSymlinks: vi.fn(),
+  scanExistingSymlinks: vi.fn()
 };
 
 describe('SyncEngine', () => {
@@ -58,6 +59,9 @@ describe('SyncEngine', () => {
   
   beforeEach(() => {
     vi.clearAllMocks();
+    
+    // Set default mock values
+    mockSymlinkManager.scanExistingSymlinks.mockResolvedValue([]);
     
     // Mock constructor calls
     (SyncPlanner as any).mockImplementation(() => mockPlanner);
@@ -1039,6 +1043,79 @@ describe('SyncEngine', () => {
       
       expect(result.configValid).toBe(false);
       expect(result.recommendations).toContain('Fix configuration validation errors');
+    });
+  });
+
+  describe('checkStatus with deleted source files', () => {
+    it('should detect broken symlinks even when source files are deleted from sharedFiles', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: [
+          // Only .worktreesync.json is in syncActions (share.txt was deleted from source)
+          {
+            targetWorktree: '/repo/feature',
+            file: '.worktreesync.json',
+            sourcePath: '/repo/main/.worktreesync.json',
+            targetPath: '/repo/feature/.worktreesync.json',
+            linkPath: '../main/.worktreesync.json',
+            action: 'create',
+            reason: 'Creating new symlink'
+          }
+        ]
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      
+      // Mock scanExistingSymlinks to return both config file and deleted file
+      mockSymlinkManager.scanExistingSymlinks = vi.fn().mockResolvedValue(['share.txt', '.worktreesync.json']);
+      
+      // Mock validateSymlinks to show that share.txt symlink is broken
+      mockSymlinkManager.validateSymlinks.mockResolvedValue({
+        valid: ['.worktreesync.json'],
+        broken: ['share.txt'], // share.txt symlink exists but is broken
+        missing: []
+      });
+      
+      const result = await syncEngine.checkStatus(mockConfig);
+      
+      expect(result.syncedFiles['/repo/feature'].broken).toContain('share.txt');
+      expect(result.syncedFiles['/repo/feature'].valid).toContain('.worktreesync.json');
+      expect(mockSymlinkManager.scanExistingSymlinks).toHaveBeenCalledWith(mockTargetWorktrees[0]);
+    });
+
+    it('should handle empty scanExistingSymlinks result', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: [
+          {
+            targetWorktree: '/repo/feature',
+            file: '.worktreesync.json',
+            sourcePath: '/repo/main/.worktreesync.json',
+            targetPath: '/repo/feature/.worktreesync.json',
+            linkPath: '../main/.worktreesync.json',
+            action: 'create',
+            reason: 'Creating new symlink'
+          }
+        ]
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      
+      // Mock scanExistingSymlinks to return empty array
+      mockSymlinkManager.scanExistingSymlinks = vi.fn().mockResolvedValue([]);
+      
+      mockSymlinkManager.validateSymlinks.mockResolvedValue({
+        valid: ['.worktreesync.json'],
+        broken: [],
+        missing: []
+      });
+      
+      const result = await syncEngine.checkStatus(mockConfig);
+      
+      expect(result.syncedFiles['/repo/feature'].broken).toEqual([]);
+      expect(result.syncedFiles['/repo/feature'].valid).toContain('.worktreesync.json');
     });
   });
 });

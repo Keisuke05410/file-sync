@@ -158,12 +158,18 @@ export class SyncEngine {
       missing: string[];
     }> = {};
 
-    // Get list of files that should be synced
-    const uniqueFiles = [...new Set(plan.syncActions.map(action => action.file))];
+    // Get list of files that should be synced from configuration
+    const configFiles = [...new Set(plan.syncActions.map(action => action.file))];
 
     // Check status for each target worktree
     for (const worktree of plan.targetWorktrees) {
-      const status = await this.symlinkManager.validateSymlinks(worktree, uniqueFiles);
+      // Scan for existing symlinks in the worktree
+      const existingSymlinks = await this.symlinkManager.scanExistingSymlinks(worktree);
+      
+      // Combine files from configuration and existing symlinks
+      const allFiles = [...new Set([...configFiles, ...existingSymlinks])];
+      
+      const status = await this.symlinkManager.validateSymlinks(worktree, allFiles);
       syncedFiles[worktree.path] = status;
     }
 
@@ -222,6 +228,7 @@ export class SyncEngine {
     const cleaned: string[] = [];
     const errors: SyncError[] = [];
 
+    // Use the same improved status checking that includes existing symlinks
     const status = await this.checkStatus(config);
 
     for (const [worktreePath, fileStatus] of Object.entries(status.syncedFiles)) {

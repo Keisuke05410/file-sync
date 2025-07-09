@@ -9,6 +9,9 @@ export class SyncPlanner {
   private worktreeManager: WorktreeManager;
   private symlinkManager: SymlinkManager;
 
+  // Configuration file that is always synced
+  private static readonly CONFIG_FILE_NAME = '.worktreesync.json';
+
   constructor() {
     this.worktreeManager = new WorktreeManager();
     this.symlinkManager = new SymlinkManager();
@@ -40,11 +43,14 @@ export class SyncPlanner {
       config.ignore
     );
 
+    // Ensure configuration file is always included
+    const finalFiles = this.ensureConfigFileIncluded(filesToSync);
+
     // Create sync actions for each target worktree
     const syncActions: SyncAction[] = [];
     
     for (const targetWorktree of targetWorktrees) {
-      for (const file of filesToSync) {
+      for (const file of finalFiles) {
         const action = await this.symlinkManager.createSyncAction(
           sourceWorktree,
           targetWorktree,
@@ -92,6 +98,16 @@ export class SyncPlanner {
     });
 
     return filteredFiles.sort();
+  }
+
+  /**
+   * Ensures the configuration file is always included in the sync files list
+   * This guarantees that all worktrees have access to the configuration file
+   */
+  private ensureConfigFileIncluded(files: string[]): string[] {
+    return files.includes(SyncPlanner.CONFIG_FILE_NAME) 
+      ? files 
+      : [SyncPlanner.CONFIG_FILE_NAME, ...files];
   }
 
   async validatePlan(plan: SyncPlan): Promise<{

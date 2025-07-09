@@ -1,6 +1,6 @@
 import { lstatSync, existsSync, symlinkSync, unlinkSync, readlinkSync } from 'fs';
 import { dirname, resolve, relative, join } from 'path';
-import { mkdir } from 'fs/promises';
+import { mkdir, readdir } from 'fs/promises';
 import type { WorktreeInfo, SyncAction } from '../types/index.js';
 
 export class FileSystemError extends Error {
@@ -339,21 +339,101 @@ export class SymlinkManager {
     for (const file of files) {
       const filePath = join(worktree.path, file);
       
-      if (!existsSync(filePath)) {
-        missing.push(file);
-        continue;
-      }
-
-      if (this.isValidSymlink(filePath)) {
-        valid.push(file);
-      } else {
+      try {
         const stats = lstatSync(filePath);
+        
         if (stats.isSymbolicLink()) {
-          broken.push(file);
+          // Check if the symlink is valid
+          if (this.isValidSymlink(filePath)) {
+            valid.push(file);
+          } else {
+            broken.push(file);
+          }
+        } else {
+          // Regular file exists
+          valid.push(file);
+        }
+      } catch (error) {
+        // File doesn't exist at all (not even as a broken symlink)
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          missing.push(file);
         }
       }
     }
 
     return { valid, broken, missing };
+  }
+
+  /**
+   * Scans a worktree directory and returns all existing symlinks
+   * This method is independent of configuration files and finds actual symlinks
+   */
+  async scanExistingSymlinks(worktree: WorktreeInfo): Promise<string[]> {
+    const symlinks: string[] = [];
+    
+    try {
+      await this.scanDirectoryForSymlinks(worktree.path, '', symlinks);
+    } catch {
+      // Return empty array on any error (permission denied, etc.)
+      return [];
+    }
+    
+    return symlinks.sort();
+  }
+
+  /**
+   * Recursively scans a directory for symlinks
+   */
+  private async scanDirectoryForSymlinks(
+    fullPath: string,
+    relativePath: string,
+    symlinks: string[]
+  ): Promise<void> {
+    try {
+      const entries = await readdir(fullPath, { withFileTypes: true });
+      
+      for (const entry of entries) {
+        const entryRelativePath = relativePath ? join(relativePath, entry.name) : entry.name;
+        
+        // Skip directories that should not be scanned
+        if (entry.isDirectory() && this.shouldSkipDirectory(entry.name)) {
+          continue;
+        }
+        
+        if (entry.isSymbolicLink()) {
+          symlinks.push(entryRelativePath);
+        } else if (entry.isDirectory()) {
+          const entryFullPath = join(fullPath, entry.name);
+          await this.scanDirectoryForSymlinks(entryFullPath, entryRelativePath, symlinks);
+        }
+      }
+    } catch {
+      // Log error for debugging but continue scanning
+      // This handles permission issues, network drives, etc.
+      return;
+    }
+  }
+
+  /**
+   * Determines if a directory should be skipped during scanning
+   */
+  private shouldSkipDirectory(dirName: string): boolean {
+    // Skip git directories and other version control
+    if (dirName === '.git' || dirName === '.svn' || dirName === '.hg') {
+      return true;
+    }
+    
+    // Skip common build/cache directories
+    if (dirName === 'node_modules' || dirName === 'dist' || dirName === 'build' || dirName === '.cache') {
+      return true;
+    }
+    
+    // Skip temporary directories
+    if (dirName.startsWith('.tmp') || dirName.startsWith('tmp')) {
+      return true;
+    }
+    
+    // Allow .vscode and other IDE directories (they might contain symlinks)
+    return false;
   }
 }

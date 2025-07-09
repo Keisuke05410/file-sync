@@ -100,9 +100,9 @@ describe('SyncPlanner', () => {
       
       expect(result.sourceWorktree).toEqual(mockSourceWorktree);
       expect(result.targetWorktrees).toEqual(mockTargetWorktrees);
-      // 4 unique files (docker-compose.yml, dev.env, test.env, .vscode/settings.json, .vscode/launch.json) = 5 files
-      // × 2 target worktrees = 10 sync actions
-      expect(result.syncActions).toHaveLength(10);
+      // 6 unique files (.worktreesync.json + 5 user files: docker-compose.yml, dev.env, test.env, .vscode/settings.json, .vscode/launch.json)
+      // × 2 target worktrees = 12 sync actions
+      expect(result.syncActions).toHaveLength(12);
       
       expect(mockWorktreeManager.getSourceWorktree).toHaveBeenCalledWith('main');
       expect(mockWorktreeManager.getTargetWorktrees).toHaveBeenCalledWith(mockSourceWorktree);
@@ -161,8 +161,8 @@ describe('SyncPlanner', () => {
       
       await syncPlanner.createSyncPlan(config);
       
-      // Should call createSyncAction for 3 unique files × 2 worktrees = 6 times
-      expect(mockSymlinkManager.createSyncAction).toHaveBeenCalledTimes(6);
+      // Should call createSyncAction for 4 unique files (.worktreesync.json + 3 user files) × 2 worktrees = 8 times
+      expect(mockSymlinkManager.createSyncAction).toHaveBeenCalledTimes(8);
     });
 
     it('should apply ignore patterns correctly', async () => {
@@ -188,8 +188,8 @@ describe('SyncPlanner', () => {
       
       await syncPlanner.createSyncPlan(config);
       
-      // Should only call createSyncAction for config.txt (logs are ignored)
-      expect(mockSymlinkManager.createSyncAction).toHaveBeenCalledTimes(2); // 1 file × 2 worktrees
+      // Should only call createSyncAction for .worktreesync.json + config.txt (logs are ignored)
+      expect(mockSymlinkManager.createSyncAction).toHaveBeenCalledTimes(4); // 2 files × 2 worktrees
     });
 
     it('should sort files alphabetically', async () => {
@@ -216,7 +216,7 @@ describe('SyncPlanner', () => {
         sharedFiles: ['*']
       });
       
-      expect(capturedFiles).toEqual(['a-file.txt', 'm-file.txt', 'z-file.txt']);
+      expect(capturedFiles).toEqual(['.worktreesync.json', 'a-file.txt', 'm-file.txt', 'z-file.txt']);
     });
 
     it('should handle empty file patterns', async () => {
@@ -230,7 +230,70 @@ describe('SyncPlanner', () => {
         sharedFiles: ['nonexistent/*']
       });
       
-      expect(result.syncActions).toHaveLength(0);
+      expect(result.syncActions).toHaveLength(2); // .worktreesync.json × 2 worktrees
+    });
+
+    it('should automatically include .worktreesync.json in sync even if not in sharedFiles', async () => {
+      mockWorktreeManager.getSourceWorktree.mockResolvedValue(mockSourceWorktree);
+      mockWorktreeManager.getTargetWorktrees.mockResolvedValue(mockTargetWorktrees);
+      
+      // Mock glob to return only user files, not the config file
+      mockGlob.mockResolvedValue(['user-file.txt']);
+      
+      const capturedFiles: string[] = [];
+      mockSymlinkManager.createSyncAction.mockImplementation(async (source, target, file) => {
+        capturedFiles.push(file);
+        return {
+          targetWorktree: target.path,
+          file,
+          sourcePath: `${source.path}/${file}`,
+          targetPath: `${target.path}/${file}`,
+          linkPath: `../${source.branch}/${file}`,
+          action: 'create' as const
+        };
+      });
+      
+      const config: Config = {
+        ...mockConfig,
+        sharedFiles: ['user-file.txt'] // .worktreesync.json is NOT included
+      };
+      
+      await syncPlanner.createSyncPlan(config);
+      
+      // Should include .worktreesync.json at the beginning
+      expect(capturedFiles).toEqual(['.worktreesync.json', 'user-file.txt', '.worktreesync.json', 'user-file.txt']);
+      expect(mockSymlinkManager.createSyncAction).toHaveBeenCalledTimes(4); // 2 files × 2 worktrees
+    });
+
+    it('should not duplicate .worktreesync.json if already in sharedFiles', async () => {
+      mockWorktreeManager.getSourceWorktree.mockResolvedValue(mockSourceWorktree);
+      mockWorktreeManager.getTargetWorktrees.mockResolvedValue(mockTargetWorktrees);
+      
+      mockGlob.mockResolvedValue(['user-file.txt', '.worktreesync.json']);
+      
+      const capturedFiles: string[] = [];
+      mockSymlinkManager.createSyncAction.mockImplementation(async (source, target, file) => {
+        capturedFiles.push(file);
+        return {
+          targetWorktree: target.path,
+          file,
+          sourcePath: `${source.path}/${file}`,
+          targetPath: `${target.path}/${file}`,
+          linkPath: `../${source.branch}/${file}`,
+          action: 'create' as const
+        };
+      });
+      
+      const config: Config = {
+        ...mockConfig,
+        sharedFiles: ['.worktreesync.json', 'user-file.txt'] // .worktreesync.json is already included
+      };
+      
+      await syncPlanner.createSyncPlan(config);
+      
+      // Should have .worktreesync.json only once at the beginning
+      expect(capturedFiles).toEqual(['.worktreesync.json', 'user-file.txt', '.worktreesync.json', 'user-file.txt']);
+      expect(mockSymlinkManager.createSyncAction).toHaveBeenCalledTimes(4); // 2 files × 2 worktrees
     });
   });
 
