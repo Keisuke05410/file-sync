@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import type { Config, SyncPlan, SyncResult, SyncError } from '../types/index.js';
+import type { Config, SyncPlan, SyncResult, SyncError, UnlinkResult } from '../types/index.js';
 import { SyncPlanner } from './planner.js';
 import { SymlinkManager, FileSystemError } from './symlink.js';
 
@@ -172,6 +172,47 @@ export class SyncEngine {
       targetWorktrees: plan.targetWorktrees.map(wt => wt.path),
       syncedFiles
     };
+  }
+
+  async unlinkSymlinks(config: Config, dryRun = false): Promise<UnlinkResult> {
+    const unlinked: string[] = [];
+    const errors: SyncError[] = [];
+
+    try {
+      // Create sync plan to get worktree information
+      const plan = await this.planner.createSyncPlan(config);
+
+      // Get current working directory to determine mode
+      const currentPath = process.cwd();
+      const isInSourceWorktree = currentPath === plan.sourceWorktree.path;
+      
+      // Determine target worktrees based on current location
+      const targetWorktrees = isInSourceWorktree 
+        ? plan.targetWorktrees  // All worktrees from source
+        : plan.targetWorktrees.filter(wt => wt.path === currentPath); // Only current worktree
+      
+      const mode = isInSourceWorktree ? 'all' : 'current';
+
+      // Get unique files from sync actions
+      const uniqueFiles = [...new Set(plan.syncActions.map(action => action.file))];
+
+      // Remove symlinks using SymlinkManager
+      const result = await this.symlinkManager.removeSymlinks(targetWorktrees, uniqueFiles, dryRun);
+      
+      unlinked.push(...result.removed);
+      errors.push(...result.errors);
+
+      return { unlinked, errors, mode };
+
+    } catch (error) {
+      errors.push({
+        file: '',
+        worktree: '',
+        error: `Unlink failed: ${error}`,
+        code: 'UNLINK_ERROR'
+      });
+      return { unlinked, errors, mode: 'all' };
+    }
   }
 
   async cleanBrokenLinks(config: Config, dryRun = false): Promise<{

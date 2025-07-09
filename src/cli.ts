@@ -75,6 +75,19 @@ export class CLI {
       .action(async (configPath: string | undefined, options: CliOptions) => {
         await this.handleCleanCommand(configPath, options);
       });
+
+    // Unlink command
+    this.program
+      .command('unlink')
+      .description('Remove symbolic links (all from source worktree, current worktree only from target worktree)')
+      .argument('[config-path]', 'Path to configuration file (default: .worktreesync.json)')
+      .option('-d, --dry-run', 'Preview changes without applying them', false)
+      .option('-v, --verbose', 'Show detailed output', false)
+      .option('-q, --quiet', 'Show only errors', false)
+      .option('--no-color', 'Disable colored output', false)
+      .action(async (configPath: string | undefined, options: CliOptions) => {
+        await this.handleUnlinkCommand(configPath, options);
+      });
   }
 
   private configureLogger(options: CliOptions): void {
@@ -235,6 +248,45 @@ export class CLI {
       
     } catch (error) {
       this.logger.failure(`Clean failed: ${error}`);
+      process.exit(1);
+    }
+  }
+
+  private async handleUnlinkCommand(configPath: string | undefined, options: CliOptions): Promise<void> {
+    this.configureLogger(options);
+
+    try {
+      const configLoader = new ConfigLoader();
+      const config = await configLoader.loadConfig(configPath);
+      
+      const engine = new SyncEngine();
+      const result = await engine.unlinkSymlinks(config, options.dryRun);
+      
+      if (result.unlinked.length > 0) {
+        const modeText = result.mode === 'all' ? 'all worktrees' : 'current worktree';
+        
+        if (options.dryRun) {
+          this.logger.info(`Would unlink symlinks from ${modeText}:`);
+        } else {
+          this.logger.success(`Unlinked symlinks from ${modeText}:`);
+        }
+        
+        for (const unlinked of result.unlinked) {
+          this.logger.info(`  ✓ ${unlinked}`);
+        }
+      } else {
+        this.logger.info('No symlinks found to unlink.');
+      }
+      
+      if (result.errors.length > 0) {
+        this.logger.warning('Some symlinks could not be unlinked:');
+        for (const error of result.errors) {
+          this.logger.error(`  ${error.file}: ${error.error}`);
+        }
+      }
+      
+    } catch (error) {
+      this.logger.failure(`Unlink failed: ${error}`);
       process.exit(1);
     }
   }

@@ -40,6 +40,12 @@ export interface SyncError {
   code?: string;
 }
 
+export interface UnlinkResult {
+  unlinked: string[];
+  errors: SyncError[];
+  mode: 'all' | 'current';
+}
+
 export interface LogLevel {
   ERROR: 0;
   WARN: 1;
