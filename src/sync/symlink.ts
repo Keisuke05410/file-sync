@@ -67,21 +67,21 @@ export class SymlinkManager {
           'EEXIST'
         );
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       if (error instanceof FileSystemError) {
         throw error;
       }
       
-      if (error.code === 'ENOENT') {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         // File doesn't exist, which is fine
         return;
       }
       
       throw new FileSystemError(
-        `Failed to remove existing file: ${error.message}`,
+        `Failed to remove existing file: ${error instanceof Error ? error.message : String(error)}`,
         path,
         'removeExisting',
-        error.code
+        (error as NodeJS.ErrnoException).code
       );
     }
   }
@@ -255,6 +255,76 @@ export class SymlinkManager {
         'executeAction'
       );
     }
+  }
+
+  async removeSymlinks(worktrees: WorktreeInfo[], files: string[], dryRun = false): Promise<{
+    removed: string[];
+    errors: Array<{
+      file: string;
+      worktree: string;
+      error: string;
+      code: string;
+    }>;
+  }> {
+    const removed: string[] = [];
+    const errors: Array<{
+      file: string;
+      worktree: string;
+      error: string;
+      code: string;
+    }> = [];
+
+    for (const worktree of worktrees) {
+      for (const file of files) {
+        const filePath = join(worktree.path, file);
+
+        try {
+          // Check if file exists
+          if (!existsSync(filePath)) {
+            continue;
+          }
+
+          // Check if it's a symlink
+          let stats;
+          try {
+            stats = lstatSync(filePath);
+          } catch (lstatError) {
+            const errorMessage = lstatError instanceof Error ? lstatError.message : String(lstatError);
+            errors.push({
+              file,
+              worktree: worktree.path,
+              error: errorMessage,
+              code: 'LSTAT_ERROR'
+            });
+            continue;
+          }
+
+          if (!stats.isSymbolicLink()) {
+            continue; // Skip regular files
+          }
+
+          // Remove symlink
+          if (!dryRun) {
+            unlinkSync(filePath);
+          }
+          
+          removed.push(file);
+
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : String(error);
+          const errorCode = error instanceof Error && 'code' in error ? String(error.code) : 'UNKNOWN';
+          
+          errors.push({
+            file,
+            worktree: worktree.path,
+            error: errorMessage,
+            code: errorCode !== 'UNKNOWN' ? errorCode : 'UNLINK_ERROR'
+          });
+        }
+      }
+    }
+
+    return { removed, errors };
   }
 
   async validateSymlinks(worktree: WorktreeInfo, files: string[]): Promise<{

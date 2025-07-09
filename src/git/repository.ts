@@ -39,9 +39,9 @@ export class RepositoryManager {
       const rootPath = result.trim();
       this.repositoryRoot = rootPath;
       return rootPath;
-    } catch (error: any) {
-      const exitCode = error.status || 1;
-      const stderr = error.stderr?.toString() || '';
+    } catch (error: unknown) {
+      const exitCode = (error as any).status || 1;
+      const stderr = (error as any).stderr?.toString() || '';
       
       if (exitCode === 128) {
         throw new GitError(
@@ -53,7 +53,7 @@ export class RepositoryManager {
       }
       
       throw new GitError(
-        `Failed to get repository root: ${stderr || error.message}`,
+        `Failed to get repository root: ${stderr || (error instanceof Error ? error.message : String(error))}`,
         'git rev-parse --show-toplevel',
         exitCode,
         stderr
@@ -78,12 +78,12 @@ export class RepositoryManager {
       });
       
       return result.trim();
-    } catch (error: any) {
-      const exitCode = error.status || 1;
-      const stderr = error.stderr?.toString() || '';
+    } catch (error: unknown) {
+      const exitCode = (error as any).status || 1;
+      const stderr = (error as any).stderr?.toString() || '';
       
       throw new GitError(
-        `Failed to get current branch: ${stderr || error.message}`,
+        `Failed to get current branch: ${stderr || (error instanceof Error ? error.message : String(error))}`,
         'git branch --show-current',
         exitCode,
         stderr
@@ -99,12 +99,12 @@ export class RepositoryManager {
       });
       
       return result.trim();
-    } catch (error: any) {
-      const exitCode = error.status || 1;
-      const stderr = error.stderr?.toString() || '';
+    } catch (error: unknown) {
+      const exitCode = (error as any).status || 1;
+      const stderr = (error as any).stderr?.toString() || '';
       
       throw new GitError(
-        `Failed to get commit hash for ${ref}: ${stderr || error.message}`,
+        `Failed to get commit hash for ${ref}: ${stderr || (error instanceof Error ? error.message : String(error))}`,
         `git rev-parse ${ref}`,
         exitCode,
         stderr
