@@ -1,5 +1,5 @@
 import { execSync } from 'child_process';
-import type { Config, SyncPlan, SyncResult, SyncError, UnlinkResult } from '../types/index.js';
+import type { Config, SyncPlan, SyncResult, SyncError, UnlinkResult, DoctorResult, SelectiveSync } from '../types/index.js';
 import { SyncPlanner } from './planner.js';
 import { SymlinkManager, FileSystemError } from './symlink.js';
 
@@ -12,7 +12,7 @@ export class SyncEngine {
     this.symlinkManager = new SymlinkManager();
   }
 
-  async sync(config: Config, dryRun = false): Promise<SyncResult> {
+  async sync(config: Config, dryRun = false, selectiveSync?: SelectiveSync): Promise<SyncResult> {
     const result: SyncResult = {
       success: false,
       created: 0,
@@ -28,7 +28,7 @@ export class SyncEngine {
       }
 
       // Create sync plan
-      const plan = await this.planner.createSyncPlan(config);
+      const plan = await this.planner.createSyncPlan(config, selectiveSync);
 
       // Validate plan
       const validation = await this.planner.validatePlan(plan);
@@ -121,8 +121,8 @@ export class SyncEngine {
     }
   }
 
-  async createPlan(config: Config): Promise<SyncPlan> {
-    return this.planner.createSyncPlan(config);
+  async createPlan(config: Config, selectiveSync?: SelectiveSync): Promise<SyncPlan> {
+    return this.planner.createSyncPlan(config, selectiveSync);
   }
 
   async validatePlan(plan: SyncPlan): Promise<{
@@ -246,5 +246,85 @@ export class SyncEngine {
     }
 
     return { cleaned, errors };
+  }
+
+  async doctor(config: Config): Promise<DoctorResult> {
+    const result: DoctorResult = {
+      configValid: true,
+      sourceWorktreeExists: true,
+      targetWorktreesAccessible: true,
+      missingFiles: [],
+      brokenSymlinks: [],
+      permissionIssues: [],
+      recommendations: []
+    };
+
+    try {
+      // Try to create sync plan to validate configuration
+      const plan = await this.planner.createSyncPlan(config);
+      
+      // Check if source worktree exists
+      result.sourceWorktreeExists = plan.sourceWorktree !== undefined;
+      
+      // Check for missing files (files that have skip action due to missing source)
+      const missingFiles = plan.syncActions
+        .filter(action => action.action === 'skip' && action.reason === 'Source file does not exist')
+        .map(action => action.file);
+      
+      result.missingFiles = [...new Set(missingFiles)];
+      
+      // Check target worktrees accessibility and symlink status
+      try {
+        for (const worktree of plan.targetWorktrees) {
+          const uniqueFiles = [...new Set(plan.syncActions.map(action => action.file))];
+          const symlinkStatus = await this.symlinkManager.validateSymlinks(worktree, uniqueFiles);
+          
+          // Collect broken symlinks
+          result.brokenSymlinks.push(...symlinkStatus.broken);
+        }
+        
+        result.targetWorktreesAccessible = true;
+      } catch (error) {
+        result.targetWorktreesAccessible = false;
+        
+        // Check for permission issues
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        if (errorMessage.includes('EACCES') || errorMessage.includes('permission denied')) {
+          result.permissionIssues.push(errorMessage);
+        }
+      }
+      
+    } catch {
+      result.configValid = false;
+    }
+    
+    // Generate recommendations
+    if (!result.configValid) {
+      result.recommendations.push('Fix configuration validation errors');
+    }
+    
+    if (!result.sourceWorktreeExists) {
+      result.recommendations.push('Check source worktree path and ensure it exists');
+    }
+    
+    if (!result.targetWorktreesAccessible) {
+      result.recommendations.push('Check target worktrees accessibility');
+    }
+    
+    if (result.missingFiles.length > 0) {
+      for (const file of result.missingFiles) {
+        result.recommendations.push(`Remove ${file} from sharedFiles or create the file in source worktree`);
+      }
+    }
+    
+    if (result.brokenSymlinks.length > 0) {
+      result.recommendations.push('Run sync-worktrees clean to remove broken symlinks');
+    }
+    
+    if (result.permissionIssues.length > 0) {
+      result.recommendations.push('Check file permissions for worktree operations');
+    }
+    
+    return result;
   }
 }

@@ -1,7 +1,7 @@
 import { glob } from 'glob';
 import { relative } from 'path';
 import { minimatch } from 'minimatch';
-import type { WorktreeInfo, Config, SyncPlan, SyncAction } from '../types/index.js';
+import type { WorktreeInfo, Config, SyncPlan, SyncAction, SelectiveSync } from '../types/index.js';
 import { WorktreeManager } from '../git/worktree.js';
 import { SymlinkManager } from './symlink.js';
 
@@ -14,17 +14,29 @@ export class SyncPlanner {
     this.symlinkManager = new SymlinkManager();
   }
 
-  async createSyncPlan(config: Config): Promise<SyncPlan> {
+  async createSyncPlan(config: Config, selectiveSync?: SelectiveSync): Promise<SyncPlan> {
     // Get source worktree
     const sourceWorktree = await this.worktreeManager.getSourceWorktree(config.sourceWorktree);
     
     // Get target worktrees (all except source)
-    const targetWorktrees = await this.worktreeManager.getTargetWorktrees(sourceWorktree);
+    let targetWorktrees = await this.worktreeManager.getTargetWorktrees(sourceWorktree);
+
+    // Apply worktree filtering if specified
+    if (selectiveSync?.worktreeName) {
+      const worktreeName = selectiveSync.worktreeName;
+      targetWorktrees = targetWorktrees.filter(worktree => 
+        worktree.branch === worktreeName || 
+        worktree.path.includes(worktreeName)
+      );
+    }
+
+    // Determine which file patterns to use
+    const filePatterns = selectiveSync?.filePatterns || config.sharedFiles;
 
     // Resolve file patterns
     const filesToSync = await this.resolveFilePatterns(
       sourceWorktree,
-      config.sharedFiles,
+      filePatterns,
       config.ignore
     );
 

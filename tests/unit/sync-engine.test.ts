@@ -49,7 +49,8 @@ const mockPlanner = {
 
 const mockSymlinkManager = {
   executeAction: vi.fn(),
-  validateSymlinks: vi.fn()
+  validateSymlinks: vi.fn(),
+  removeSymlinks: vi.fn()
 };
 
 describe('SyncEngine', () => {
@@ -337,7 +338,7 @@ describe('SyncEngine', () => {
       const result = await syncEngine.createPlan(mockConfig);
       
       expect(result).toBe(mockSyncPlan);
-      expect(mockPlanner.createSyncPlan).toHaveBeenCalledWith(mockConfig);
+      expect(mockPlanner.createSyncPlan).toHaveBeenCalledWith(mockConfig, undefined);
     });
   });
 
@@ -861,6 +862,183 @@ describe('SyncEngine', () => {
       expect(result.cleaned).toEqual([]);
       expect(result.errors).toHaveLength(0);
       expect(mockUnlinkSync).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('doctor', () => {
+    it('should diagnose healthy configuration', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: []
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      mockSymlinkManager.validateSymlinks.mockResolvedValue({
+        valid: ['docker-compose.yml', '.env'],
+        broken: [],
+        missing: []
+      });
+      
+      const result = await syncEngine.doctor(mockConfig);
+      
+      expect(result.configValid).toBe(true);
+      expect(result.sourceWorktreeExists).toBe(true);
+      expect(result.targetWorktreesAccessible).toBe(true);
+      expect(result.missingFiles).toHaveLength(0);
+      expect(result.brokenSymlinks).toHaveLength(0);
+      expect(result.permissionIssues).toHaveLength(0);
+      expect(result.recommendations).toHaveLength(0);
+    });
+
+    it('should detect missing files', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: [
+          {
+            targetWorktree: '/repo/feature',
+            file: 'missing.txt',
+            sourcePath: '/repo/main/missing.txt',
+            targetPath: '/repo/feature/missing.txt',
+            linkPath: '../main/missing.txt',
+            action: 'skip',
+            reason: 'Source file does not exist'
+          }
+        ]
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      mockSymlinkManager.validateSymlinks.mockResolvedValue({
+        valid: [],
+        broken: [],
+        missing: ['missing.txt']
+      });
+      
+      const result = await syncEngine.doctor(mockConfig);
+      
+      expect(result.configValid).toBe(true);
+      expect(result.sourceWorktreeExists).toBe(true);
+      expect(result.targetWorktreesAccessible).toBe(true);
+      expect(result.missingFiles).toContain('missing.txt');
+      expect(result.recommendations).toContain('Remove missing.txt from sharedFiles or create the file in source worktree');
+    });
+
+    it('should detect broken symlinks', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: []
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      mockSymlinkManager.validateSymlinks.mockResolvedValue({
+        valid: [],
+        broken: ['broken-link.txt'],
+        missing: []
+      });
+      
+      const result = await syncEngine.doctor(mockConfig);
+      
+      expect(result.configValid).toBe(true);
+      expect(result.sourceWorktreeExists).toBe(true);
+      expect(result.targetWorktreesAccessible).toBe(true);
+      expect(result.brokenSymlinks).toContain('broken-link.txt');
+      expect(result.recommendations).toContain('Run sync-worktrees clean to remove broken symlinks');
+    });
+
+    it('should detect configuration validation errors', async () => {
+      const invalidConfig = {
+        ...mockConfig,
+        sharedFiles: [] // Invalid: empty array
+      };
+      
+      mockPlanner.createSyncPlan.mockRejectedValue(new Error('Configuration validation failed'));
+      
+      const result = await syncEngine.doctor(invalidConfig);
+      
+      expect(result.configValid).toBe(false);
+      expect(result.recommendations).toContain('Fix configuration validation errors');
+    });
+
+    it('should detect inaccessible target worktrees', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: []
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      mockSymlinkManager.validateSymlinks.mockRejectedValue(new Error('ENOENT: no such file or directory'));
+      
+      const result = await syncEngine.doctor(mockConfig);
+      
+      expect(result.configValid).toBe(true);
+      expect(result.sourceWorktreeExists).toBe(true);
+      expect(result.targetWorktreesAccessible).toBe(false);
+      expect(result.recommendations).toContain('Check target worktrees accessibility');
+    });
+
+    it('should detect permission issues', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: []
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      mockSymlinkManager.validateSymlinks.mockRejectedValue(new Error('EACCES: permission denied'));
+      
+      const result = await syncEngine.doctor(mockConfig);
+      
+      expect(result.configValid).toBe(true);
+      expect(result.sourceWorktreeExists).toBe(true);
+      expect(result.targetWorktreesAccessible).toBe(false);
+      expect(result.permissionIssues).toHaveLength(1);
+      expect(result.recommendations).toContain('Check file permissions for worktree operations');
+    });
+
+    it('should handle multiple issues', async () => {
+      const mockPlan = {
+        sourceWorktree: mockSourceWorktree,
+        targetWorktrees: mockTargetWorktrees,
+        syncActions: [
+          {
+            targetWorktree: '/repo/feature',
+            file: 'missing.txt',
+            sourcePath: '/repo/main/missing.txt',
+            targetPath: '/repo/feature/missing.txt',
+            linkPath: '../main/missing.txt',
+            action: 'skip',
+            reason: 'Source file does not exist'
+          }
+        ]
+      };
+      
+      mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
+      mockSymlinkManager.validateSymlinks.mockResolvedValue({
+        valid: [],
+        broken: ['broken-link.txt'],
+        missing: ['missing.txt']
+      });
+      
+      const result = await syncEngine.doctor(mockConfig);
+      
+      expect(result.configValid).toBe(true);
+      expect(result.sourceWorktreeExists).toBe(true);
+      expect(result.targetWorktreesAccessible).toBe(true);
+      expect(result.missingFiles).toContain('missing.txt');
+      expect(result.brokenSymlinks).toContain('broken-link.txt');
+      expect(result.recommendations).toHaveLength(2);
+    });
+
+    it('should handle doctor method errors', async () => {
+      mockPlanner.createSyncPlan.mockRejectedValue(new Error('Unexpected error'));
+      
+      const result = await syncEngine.doctor(mockConfig);
+      
+      expect(result.configValid).toBe(false);
+      expect(result.recommendations).toContain('Fix configuration validation errors');
     });
   });
 });

@@ -46,6 +46,16 @@ export interface UnlinkResult {
   mode: 'all' | 'current';
 }
 
+export interface DoctorResult {
+  configValid: boolean;
+  sourceWorktreeExists: boolean;
+  targetWorktreesAccessible: boolean;
+  missingFiles: string[];
+  brokenSymlinks: string[];
+  permissionIssues: string[];
+  recommendations: string[];
+}
+
 export interface LogLevel {
   ERROR: 0;
   WARN: 1;
@@ -60,4 +70,11 @@ export interface CliOptions {
   verbose?: boolean;
   quiet?: boolean;
   noColor?: boolean;
+  files?: string;
+  worktree?: string;
+}
+
+export interface SelectiveSync {
+  filePatterns?: string[];
+  worktreeName?: string;
 }

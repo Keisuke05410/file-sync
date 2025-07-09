@@ -50,6 +50,15 @@ vi.mock('../../src/sync/engine.js', () => ({
       totalFiles: 1,
       actionCounts: { create: 1, update: 0, skip: 0 },
       filesByWorktree: { '/repo-feature': 1 }
+    }),
+    doctor: vi.fn().mockResolvedValue({
+      configValid: true,
+      sourceWorktreeExists: true,
+      targetWorktreesAccessible: true,
+      missingFiles: [],
+      brokenSymlinks: [],
+      permissionIssues: [],
+      recommendations: []
     })
   }))
 }));
@@ -1155,6 +1164,435 @@ describe('CLI', () => {
       
       await expect(cli.handleSyncCommand(undefined, { quiet: false, verbose: false, dryRun: false, noColor: false }))
         .resolves.toBeUndefined();
+    });
+  });
+
+  describe('Doctor Command', () => {
+    it('should handle doctor command successfully with all checks passing', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['test.txt'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockDoctorResult = {
+        configValid: true,
+        sourceWorktreeExists: true,
+        targetWorktreesAccessible: true,
+        missingFiles: [],
+        brokenSymlinks: [],
+        permissionIssues: [],
+        recommendations: []
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockDoctor = vi.fn().mockResolvedValue(mockDoctorResult);
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: vi.fn(),
+        sync: vi.fn(),
+        getSyncSummary: vi.fn(),
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: vi.fn(),
+        doctor: mockDoctor
+      }) as any);
+      
+      await cli.handleDoctorCommand(undefined, { quiet: false, verbose: false, noColor: false });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockDoctor).toHaveBeenCalledWith(mockConfig);
+    });
+
+    it('should handle doctor command with issues found', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['test.txt', 'missing.txt'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockDoctorResult = {
+        configValid: true,
+        sourceWorktreeExists: true,
+        targetWorktreesAccessible: false,
+        missingFiles: ['missing.txt'],
+        brokenSymlinks: ['broken-link.txt'],
+        permissionIssues: ['permission-denied.txt'],
+        recommendations: [
+          'Remove missing.txt from sharedFiles or create the file',
+          'Run sync-worktrees clean to remove broken symlinks',
+          'Check file permissions for permission-denied.txt'
+        ]
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockDoctor = vi.fn().mockResolvedValue(mockDoctorResult);
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: vi.fn(),
+        sync: vi.fn(),
+        getSyncSummary: vi.fn(),
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: vi.fn(),
+        doctor: mockDoctor
+      }) as any);
+      
+      await cli.handleDoctorCommand(undefined, { quiet: false, verbose: false, noColor: false });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockDoctor).toHaveBeenCalledWith(mockConfig);
+    });
+
+    it('should handle doctor command with config validation error', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['test.txt'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockDoctorResult = {
+        configValid: false,
+        sourceWorktreeExists: true,
+        targetWorktreesAccessible: true,
+        missingFiles: [],
+        brokenSymlinks: [],
+        permissionIssues: [],
+        recommendations: ['Fix configuration validation errors']
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockDoctor = vi.fn().mockResolvedValue(mockDoctorResult);
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: vi.fn(),
+        sync: vi.fn(),
+        getSyncSummary: vi.fn(),
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: vi.fn(),
+        doctor: mockDoctor
+      }) as any);
+      
+      await cli.handleDoctorCommand(undefined, { quiet: false, verbose: false, noColor: false });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockDoctor).toHaveBeenCalledWith(mockConfig);
+    });
+
+    it('should handle doctor command errors', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: vi.fn().mockRejectedValue(new Error('Config error')),
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      await expect(async () => {
+        await cli.handleDoctorCommand(undefined, { quiet: false, verbose: false, noColor: false });
+      }).rejects.toThrow('process.exit called');
+      
+      expect(mockProcessExit).toHaveBeenCalledWith(1);
+    });
+  });
+
+  describe('Selective Sync', () => {
+    it('should handle selective sync with files option', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['docker-compose.yml', 'test.txt', '.env'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockPlan = {
+        sourceWorktree: { path: '/repo', branch: 'main', head: 'abc123', isMain: true },
+        targetWorktrees: [{ path: '/repo-feature', branch: 'feature', head: 'def456', isMain: false }],
+        syncActions: [
+          {
+            targetWorktree: '/repo-feature',
+            file: 'docker-compose.yml',
+            sourcePath: '/repo/docker-compose.yml',
+            targetPath: '/repo-feature/docker-compose.yml',
+            linkPath: '../docker-compose.yml',
+            action: 'create'
+          }
+        ]
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockCreatePlan = vi.fn().mockResolvedValue(mockPlan);
+      const mockSync = vi.fn().mockResolvedValue({ success: true, created: 1, updated: 0, skipped: 0, errors: [] });
+      const mockGetSyncSummary = vi.fn().mockReturnValue({ 
+        totalWorktrees: 1, 
+        totalFiles: 1,
+        actionCounts: { create: 1, update: 0, skip: 0 },
+        filesByWorktree: { '/repo-feature': 1 }
+      });
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: mockCreatePlan,
+        sync: mockSync,
+        getSyncSummary: mockGetSyncSummary,
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: vi.fn(),
+        doctor: vi.fn()
+      }) as any);
+      
+      await cli.handleSyncCommand(undefined, { 
+        quiet: false, 
+        verbose: false, 
+        dryRun: false, 
+        noColor: false, 
+        files: 'docker-compose.yml,*.env' 
+      });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockCreatePlan).toHaveBeenCalledWith(mockConfig, { filePatterns: ['docker-compose.yml', '*.env'] });
+    });
+
+    it('should handle selective sync with worktree option', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['docker-compose.yml'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockPlan = {
+        sourceWorktree: { path: '/repo', branch: 'main', head: 'abc123', isMain: true },
+        targetWorktrees: [{ path: '/repo-feature', branch: 'feature', head: 'def456', isMain: false }],
+        syncActions: [
+          {
+            targetWorktree: '/repo-feature',
+            file: 'docker-compose.yml',
+            sourcePath: '/repo/docker-compose.yml',
+            targetPath: '/repo-feature/docker-compose.yml',
+            linkPath: '../docker-compose.yml',
+            action: 'create'
+          }
+        ]
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockCreatePlan = vi.fn().mockResolvedValue(mockPlan);
+      const mockSync = vi.fn().mockResolvedValue({ success: true, created: 1, updated: 0, skipped: 0, errors: [] });
+      const mockGetSyncSummary = vi.fn().mockReturnValue({ 
+        totalWorktrees: 1, 
+        totalFiles: 1,
+        actionCounts: { create: 1, update: 0, skip: 0 },
+        filesByWorktree: { '/repo-feature': 1 }
+      });
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: mockCreatePlan,
+        sync: mockSync,
+        getSyncSummary: mockGetSyncSummary,
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: vi.fn(),
+        doctor: vi.fn()
+      }) as any);
+      
+      await cli.handleSyncCommand(undefined, { 
+        quiet: false, 
+        verbose: false, 
+        dryRun: false, 
+        noColor: false, 
+        worktree: 'feature' 
+      });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockCreatePlan).toHaveBeenCalledWith(mockConfig, { worktreeName: 'feature' });
+    });
+
+    it('should handle selective sync with both files and worktree options', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['docker-compose.yml', 'test.txt'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockPlan = {
+        sourceWorktree: { path: '/repo', branch: 'main', head: 'abc123', isMain: true },
+        targetWorktrees: [{ path: '/repo-feature', branch: 'feature', head: 'def456', isMain: false }],
+        syncActions: [
+          {
+            targetWorktree: '/repo-feature',
+            file: 'docker-compose.yml',
+            sourcePath: '/repo/docker-compose.yml',
+            targetPath: '/repo-feature/docker-compose.yml',
+            linkPath: '../docker-compose.yml',
+            action: 'create'
+          }
+        ]
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockCreatePlan = vi.fn().mockResolvedValue(mockPlan);
+      const mockSync = vi.fn().mockResolvedValue({ success: true, created: 1, updated: 0, skipped: 0, errors: [] });
+      const mockGetSyncSummary = vi.fn().mockReturnValue({ 
+        totalWorktrees: 1, 
+        totalFiles: 1,
+        actionCounts: { create: 1, update: 0, skip: 0 },
+        filesByWorktree: { '/repo-feature': 1 }
+      });
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: mockCreatePlan,
+        sync: mockSync,
+        getSyncSummary: mockGetSyncSummary,
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: vi.fn(),
+        doctor: vi.fn()
+      }) as any);
+      
+      await cli.handleSyncCommand(undefined, { 
+        quiet: false, 
+        verbose: false, 
+        dryRun: false, 
+        noColor: false, 
+        files: 'docker-compose.yml',
+        worktree: 'feature' 
+      });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockCreatePlan).toHaveBeenCalledWith(mockConfig, { 
+        filePatterns: ['docker-compose.yml'],
+        worktreeName: 'feature' 
+      });
+    });
+
+    it('should handle selective sync without options (normal sync)', async () => {
+      const cli = new CLI();
+      const { ConfigLoader } = await import('../../src/config/loader.js');
+      const { SyncEngine } = await import('../../src/sync/engine.js');
+      
+      const mockConfig = { 
+        sharedFiles: ['docker-compose.yml'], 
+        sourceWorktree: 'main',
+        linkMode: 'relative' as const,
+        overwrite: false,
+        ignore: []
+      };
+      const mockPlan = {
+        sourceWorktree: { path: '/repo', branch: 'main', head: 'abc123', isMain: true },
+        targetWorktrees: [{ path: '/repo-feature', branch: 'feature', head: 'def456', isMain: false }],
+        syncActions: [
+          {
+            targetWorktree: '/repo-feature',
+            file: 'docker-compose.yml',
+            sourcePath: '/repo/docker-compose.yml',
+            targetPath: '/repo-feature/docker-compose.yml',
+            linkPath: '../docker-compose.yml',
+            action: 'create'
+          }
+        ]
+      };
+      
+      const mockLoadConfig = vi.fn().mockResolvedValue(mockConfig);
+      const mockCreatePlan = vi.fn().mockResolvedValue(mockPlan);
+      const mockSync = vi.fn().mockResolvedValue({ success: true, created: 1, updated: 0, skipped: 0, errors: [] });
+      const mockGetSyncSummary = vi.fn().mockReturnValue({ 
+        totalWorktrees: 1, 
+        totalFiles: 1,
+        actionCounts: { create: 1, update: 0, skip: 0 },
+        filesByWorktree: { '/repo-feature': 1 }
+      });
+      
+      vi.mocked(ConfigLoader).mockImplementation(() => ({
+        loadConfig: mockLoadConfig,
+        createSampleConfigFile: vi.fn(),
+        generateSampleConfig: vi.fn()
+      }) as any);
+      
+      vi.mocked(SyncEngine).mockImplementation(() => ({
+        createPlan: mockCreatePlan,
+        sync: mockSync,
+        getSyncSummary: mockGetSyncSummary,
+        checkStatus: vi.fn(),
+        cleanBrokenLinks: vi.fn(),
+        unlinkSymlinks: vi.fn(),
+        doctor: vi.fn()
+      }) as any);
+      
+      await cli.handleSyncCommand(undefined, { 
+        quiet: false, 
+        verbose: false, 
+        dryRun: false, 
+        noColor: false
+      });
+      
+      expect(mockLoadConfig).toHaveBeenCalledWith(undefined);
+      expect(mockCreatePlan).toHaveBeenCalledWith(mockConfig, undefined);
     });
   });
 });

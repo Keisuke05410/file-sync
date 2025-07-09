@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { ConfigLoader } from './config/loader.js';
 import { SyncEngine } from './sync/engine.js';
 import { Logger, LogLevel } from './utils/logger.js';
-import type { CliOptions, SyncAction } from './types/index.js';
+import type { CliOptions, SyncAction, SelectiveSync } from './types/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -38,6 +38,8 @@ export class CLI {
       .option('-v, --verbose', 'Show detailed output', false)
       .option('-q, --quiet', 'Show only errors', false)
       .option('--no-color', 'Disable colored output', false)
+      .option('--files <patterns>', 'Only sync specific file patterns (comma-separated)')
+      .option('--worktree <name>', 'Only sync to specific worktree')
       .action(async (configPath: string | undefined, options: CliOptions) => {
         await this.handleSyncCommand(configPath, options);
       });
@@ -88,6 +90,18 @@ export class CLI {
       .action(async (configPath: string | undefined, options: CliOptions) => {
         await this.handleUnlinkCommand(configPath, options);
       });
+
+    // Doctor command
+    this.program
+      .command('doctor')
+      .description('Diagnose configuration and worktree health')
+      .argument('[config-path]', 'Path to configuration file (default: .worktreesync.json)')
+      .option('-v, --verbose', 'Show detailed output', false)
+      .option('-q, --quiet', 'Show only errors', false)
+      .option('--no-color', 'Disable colored output', false)
+      .action(async (configPath: string | undefined, options: CliOptions) => {
+        await this.handleDoctorCommand(configPath, options);
+      });
   }
 
   private configureLogger(options: CliOptions): void {
@@ -112,10 +126,19 @@ export class CLI {
       const configLoader = new ConfigLoader();
       const config = await configLoader.loadConfig(configPath);
       
+      // Parse selective sync options
+      const selectiveSync: SelectiveSync = {};
+      if (options.files) {
+        selectiveSync.filePatterns = options.files.split(',').map(pattern => pattern.trim());
+      }
+      if (options.worktree) {
+        selectiveSync.worktreeName = options.worktree;
+      }
+      
       this.logger.progress('Syncing worktrees...');
       
       const engine = new SyncEngine();
-      const plan = await engine.createPlan(config);
+      const plan = await engine.createPlan(config, Object.keys(selectiveSync).length > 0 ? selectiveSync : undefined);
       
       // Show plan summary
       const summary = engine.getSyncSummary(plan);
@@ -133,7 +156,7 @@ export class CLI {
         this.logger.info(chalk.blue('\nℹ️  This is a dry run. No changes were made.'));
       } else {
         // Execute sync
-        const result = await engine.sync(config, false);
+        const result = await engine.sync(config, false, Object.keys(selectiveSync).length > 0 ? selectiveSync : undefined);
         
         this.logger.info('\n🔗 Creating symlinks:');
         this.showSyncActions(plan.syncActions, false);
@@ -287,6 +310,97 @@ export class CLI {
       
     } catch (error) {
       this.logger.failure(`Unlink failed: ${error}`);
+      process.exit(1);
+    }
+  }
+
+  private async handleDoctorCommand(configPath: string | undefined, options: CliOptions): Promise<void> {
+    this.configureLogger(options);
+
+    try {
+      const configLoader = new ConfigLoader();
+      const config = await configLoader.loadConfig(configPath);
+      
+      const engine = new SyncEngine();
+      const result = await engine.doctor(config);
+      
+      this.logger.info('🔍 Worktree Sync Health Check');
+      this.logger.info('');
+      
+      // Configuration validation
+      if (result.configValid) {
+        this.logger.success('✓ Configuration file is valid');
+      } else {
+        this.logger.error('✗ Configuration validation failed');
+      }
+      
+      // Source worktree check
+      if (result.sourceWorktreeExists) {
+        this.logger.success('✓ Source worktree exists and is accessible');
+      } else {
+        this.logger.error('✗ Source worktree does not exist or is not accessible');
+      }
+      
+      // Target worktrees check
+      if (result.targetWorktreesAccessible) {
+        this.logger.success('✓ All target worktrees are accessible');
+      } else {
+        this.logger.error('✗ Some target worktrees are not accessible');
+      }
+      
+      // Missing files check
+      if (result.missingFiles.length === 0) {
+        this.logger.success('✓ All shared files exist in source worktree');
+      } else {
+        this.logger.warning(`⚠ ${result.missingFiles.length} shared files missing:`);
+        for (const file of result.missingFiles) {
+          this.logger.warning(`  - ${file}`);
+        }
+      }
+      
+      // Broken symlinks check
+      if (result.brokenSymlinks.length === 0) {
+        this.logger.success('✓ No broken symlinks detected');
+      } else {
+        this.logger.warning(`⚠ ${result.brokenSymlinks.length} broken symlinks detected:`);
+        for (const link of result.brokenSymlinks) {
+          this.logger.warning(`  - ${link}`);
+        }
+      }
+      
+      // Permission issues check
+      if (result.permissionIssues.length === 0) {
+        this.logger.success('✓ No permission issues detected');
+      } else {
+        this.logger.error(`✗ ${result.permissionIssues.length} permission issues detected:`);
+        for (const issue of result.permissionIssues) {
+          this.logger.error(`  - ${issue}`);
+        }
+      }
+      
+      // Recommendations
+      if (result.recommendations.length > 0) {
+        this.logger.info('');
+        this.logger.info('📋 Recommendations:');
+        for (const recommendation of result.recommendations) {
+          this.logger.info(`  - ${recommendation}`);
+        }
+      }
+      
+      // Summary
+      const hasIssues = !result.configValid || !result.sourceWorktreeExists || 
+                       !result.targetWorktreesAccessible || result.missingFiles.length > 0 || 
+                       result.brokenSymlinks.length > 0 || result.permissionIssues.length > 0;
+      
+      this.logger.info('');
+      if (hasIssues) {
+        this.logger.warning('⚠ Issues found. Please review the recommendations above.');
+      } else {
+        this.logger.success('✅ All checks passed. Your worktree sync setup is healthy!');
+      }
+      
+    } catch (error) {
+      this.logger.failure(`Doctor check failed: ${error}`);
       process.exit(1);
     }
   }

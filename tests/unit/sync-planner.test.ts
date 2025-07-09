@@ -614,4 +614,135 @@ describe('SyncPlanner', () => {
       expect(optimized).toEqual(plan);
     });
   });
+
+  describe('createSyncPlan with selective sync', () => {
+    it('should create plan with file pattern filtering', async () => {
+      const mockConfig: Config = {
+        sharedFiles: ['docker-compose.yml', 'test.txt', '.env'],
+        sourceWorktree: 'main',
+        linkMode: 'relative',
+        overwrite: false,
+        ignore: []
+      };
+      
+      const selectiveSync = {
+        filePatterns: ['docker-compose.yml', '*.env']
+      };
+      
+      mockWorktreeManager.getSourceWorktree.mockResolvedValue(mockSourceWorktree);
+      mockWorktreeManager.getTargetWorktrees.mockResolvedValue(mockTargetWorktrees);
+      mockGlob.mockResolvedValue(['docker-compose.yml', '.env']);
+      mockSymlinkManager.createSyncAction.mockResolvedValue({
+        targetWorktree: '/repo/feature',
+        file: 'docker-compose.yml',
+        sourcePath: '/repo/main/docker-compose.yml',
+        targetPath: '/repo/feature/docker-compose.yml',
+        linkPath: '../main/docker-compose.yml',
+        action: 'create',
+        reason: 'Creating new symlink'
+      });
+      
+      const plan = await syncPlanner.createSyncPlan(mockConfig, selectiveSync);
+      
+      expect(plan.sourceWorktree).toBe(mockSourceWorktree);
+      expect(plan.targetWorktrees).toEqual(mockTargetWorktrees);
+      expect(mockGlob).toHaveBeenCalledWith('docker-compose.yml', expect.any(Object));
+      expect(mockGlob).toHaveBeenCalledWith('*.env', expect.any(Object));
+    });
+
+    it('should create plan with worktree filtering', async () => {
+      const mockConfig: Config = {
+        sharedFiles: ['docker-compose.yml'],
+        sourceWorktree: 'main',
+        linkMode: 'relative',
+        overwrite: false,
+        ignore: []
+      };
+      
+      const selectiveSync = {
+        worktreeName: 'feature'
+      };
+      
+      mockWorktreeManager.getSourceWorktree.mockResolvedValue(mockSourceWorktree);
+      mockWorktreeManager.getTargetWorktrees.mockResolvedValue(mockTargetWorktrees);
+      mockGlob.mockResolvedValue(['docker-compose.yml']);
+      mockSymlinkManager.createSyncAction.mockResolvedValue({
+        targetWorktree: '/repo/feature',
+        file: 'docker-compose.yml',
+        sourcePath: '/repo/main/docker-compose.yml',
+        targetPath: '/repo/feature/docker-compose.yml',
+        linkPath: '../main/docker-compose.yml',
+        action: 'create',
+        reason: 'Creating new symlink'
+      });
+      
+      const plan = await syncPlanner.createSyncPlan(mockConfig, selectiveSync);
+      
+      expect(plan.sourceWorktree).toBe(mockSourceWorktree);
+      expect(plan.targetWorktrees).toEqual([mockTargetWorktrees[0]]); // Only 'feature' worktree
+    });
+
+    it('should create plan with both file and worktree filtering', async () => {
+      const mockConfig: Config = {
+        sharedFiles: ['docker-compose.yml', 'test.txt'],
+        sourceWorktree: 'main',
+        linkMode: 'relative',
+        overwrite: false,
+        ignore: []
+      };
+      
+      const selectiveSync = {
+        filePatterns: ['docker-compose.yml'],
+        worktreeName: 'feature'
+      };
+      
+      mockWorktreeManager.getSourceWorktree.mockResolvedValue(mockSourceWorktree);
+      mockWorktreeManager.getTargetWorktrees.mockResolvedValue(mockTargetWorktrees);
+      mockGlob.mockResolvedValue(['docker-compose.yml']);
+      mockSymlinkManager.createSyncAction.mockResolvedValue({
+        targetWorktree: '/repo/feature',
+        file: 'docker-compose.yml',
+        sourcePath: '/repo/main/docker-compose.yml',
+        targetPath: '/repo/feature/docker-compose.yml',
+        linkPath: '../main/docker-compose.yml',
+        action: 'create',
+        reason: 'Creating new symlink'
+      });
+      
+      const plan = await syncPlanner.createSyncPlan(mockConfig, selectiveSync);
+      
+      expect(plan.sourceWorktree).toBe(mockSourceWorktree);
+      expect(plan.targetWorktrees).toEqual([mockTargetWorktrees[0]]); // Only 'feature' worktree
+      expect(mockGlob).toHaveBeenCalledWith('docker-compose.yml', expect.any(Object));
+    });
+
+    it('should create plan without selective sync (normal behavior)', async () => {
+      const mockConfig: Config = {
+        sharedFiles: ['docker-compose.yml'],
+        sourceWorktree: 'main',
+        linkMode: 'relative',
+        overwrite: false,
+        ignore: []
+      };
+      
+      mockWorktreeManager.getSourceWorktree.mockResolvedValue(mockSourceWorktree);
+      mockWorktreeManager.getTargetWorktrees.mockResolvedValue(mockTargetWorktrees);
+      mockGlob.mockResolvedValue(['docker-compose.yml']);
+      mockSymlinkManager.createSyncAction.mockResolvedValue({
+        targetWorktree: '/repo/feature',
+        file: 'docker-compose.yml',
+        sourcePath: '/repo/main/docker-compose.yml',
+        targetPath: '/repo/feature/docker-compose.yml',
+        linkPath: '../main/docker-compose.yml',
+        action: 'create',
+        reason: 'Creating new symlink'
+      });
+      
+      const plan = await syncPlanner.createSyncPlan(mockConfig);
+      
+      expect(plan.sourceWorktree).toBe(mockSourceWorktree);
+      expect(plan.targetWorktrees).toEqual(mockTargetWorktrees);
+      expect(mockGlob).toHaveBeenCalledWith('docker-compose.yml', expect.any(Object));
+    });
+  });
 });

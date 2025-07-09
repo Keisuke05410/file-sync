@@ -110,10 +110,13 @@ npm run dev                  # Run in development mode
 npx sync-worktrees           # Sync files across worktrees
 npx sync-worktrees --dry-run # Preview changes without applying
 npx sync-worktrees --verbose # Show detailed output
+npx sync-worktrees --files "*.env,docker-compose.yml" # Sync specific files
+npx sync-worktrees --worktree feature # Sync to specific worktree
 npx sync-worktrees init      # Create sample configuration file
 npx sync-worktrees status    # Check synchronization status
 npx sync-worktrees unlink    # Remove symbolic links (intelligent mode)
 npx sync-worktrees clean     # Remove broken symbolic links
+npx sync-worktrees doctor    # Diagnose configuration and worktree health
 npx sync-worktrees --help    # Show help information
 ```
 
@@ -154,7 +157,9 @@ npx sync-worktrees --help    # Show help information
 - **Status Command**: `npx sync-worktrees status [config-path]` - Check sync status
 - **Unlink Command**: `npx sync-worktrees unlink [config-path]` - Remove symbolic links intelligently
 - **Clean Command**: `npx sync-worktrees clean [config-path]` - Remove broken links
+- **Doctor Command**: `npx sync-worktrees doctor [config-path]` - Diagnose configuration and worktree health
 - **Global Options**: `--dry-run`, `--verbose`, `--quiet`, `--no-color`
+- **Selective Sync Options**: `--files <patterns>`, `--worktree <name>` (for main command)
 
 ## Git Integration Patterns
 
@@ -213,7 +218,7 @@ git worktree list              # List all worktrees
 - **Configuration System**: Zod-based validation with comprehensive error handling
 - **Git Integration**: Repository detection and worktree discovery
 - **Symlink Management**: Relative/absolute link creation with idempotent operations
-- **Testing Suite**: 331 tests covering unit and integration scenarios
+- **Testing Suite**: 351 tests covering unit and integration scenarios
 - **Error Handling**: Robust error system with custom error classes
 - **Logging System**: Configurable logging with colors and progress indicators
 - **Dry-run Support**: Preview functionality across all commands
@@ -221,6 +226,8 @@ git worktree list              # List all worktrees
 - **Status Command**: Check current synchronization state
 - **Unlink Command**: Intelligent symbolic link removal based on execution context
 - **Clean Command**: Remove broken symbolic links
+- **Doctor Command**: Comprehensive health check and diagnostics for configuration and worktrees
+- **Selective Sync**: Support for syncing specific files or worktrees via CLI options
 - **Glob Patterns**: Full pattern matching support for file selection
 
 ## Development Methodology
