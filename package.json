@@ -1,0 +1,53 @@
+{
+  "name": "worktree-sync",
+  "version": "0.1.0",
+  "description": "CLI tool for synchronizing files between Git worktrees using symbolic links",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "sync-worktrees": "./bin/sync-worktrees"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest --run",
+    "test:ui": "vitest --ui",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage --run",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "type-check": "tsc --noEmit"
+  },
+  "keywords": [
+    "git",
+    "worktree",
+    "symlink",
+    "cli",
+    "sync",
+    "development-tools"
+  ],
+  "author": "k.kaji",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.0.0",
+    "glob": "^10.3.10",
+    "minimatch": "^9.0.3",
+    "ora": "^8.0.1",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.30",
+    "@typescript-eslint/eslint-plugin": "^7.4.0",
+    "@typescript-eslint/parser": "^7.4.0",
+    "@vitest/coverage-v8": "^3.2.4",
+    "@vitest/ui": "^3.2.4",
+    "eslint": "^8.57.0",
+    "tsx": "^4.7.1",
+    "typescript": "^5.4.3",
+    "vitest": "^3.2.4"
+  }
+}
