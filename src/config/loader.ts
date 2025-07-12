@@ -65,6 +65,9 @@ export class ConfigLoader {
   }
 
   async generateSampleConfig(): Promise<string> {
+    // Get current worktree path
+    const currentPath = process.cwd();
+    
     const sampleConfig: ConfigSchema = {
       $schema: 'https://unpkg.com/worktree-sync/schema.json',
       sharedFiles: [
@@ -72,7 +75,7 @@ export class ConfigLoader {
         '.env.local',
         '.vscode/settings.json'
       ],
-      sourceWorktree: 'main',
+      sourceWorktree: currentPath, // Use current worktree path
       linkMode: 'relative',
       overwrite: false,
       ignore: [

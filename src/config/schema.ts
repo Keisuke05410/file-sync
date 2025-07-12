@@ -94,7 +94,7 @@ export const jsonSchema = {
     sourceWorktree: {
       type: 'string',
       default: 'main',
-      description: 'Name of the source worktree (branch name)'
+      description: 'Source worktree specified by branch name, absolute path, or relative path from repository root'
     },
     linkMode: {
       type: 'string',

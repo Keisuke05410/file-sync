@@ -1,0 +1,19 @@
+{
+  "$schema": "https://unpkg.com/worktree-sync/schema.json",
+  "sharedFiles": [
+    "docker-compose.yml",
+    ".env.local",
+    ".vscode/settings.json"
+  ],
+  "sourceWorktree": "main",
+  "linkMode": "relative",
+  "overwrite": false,
+  "ignore": [
+    "*.log",
+    "node_modules/**"
+  ],
+  "hooks": {
+    "beforeSync": "echo \"Starting sync...\"",
+    "afterSync": "echo \"Sync completed!\""
+  }
+}

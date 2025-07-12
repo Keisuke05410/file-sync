@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
 import { existsSync } from 'fs';
-import { basename } from 'path';
+import { basename, dirname, isAbsolute, resolve } from 'path';
 import { GitError, RepositoryManager } from './repository.js';
 import type { WorktreeInfo } from '../types/index.js';
 
@@ -112,18 +112,40 @@ export class WorktreeManager {
 
   async getSourceWorktree(sourceWorktreeName: string): Promise<WorktreeInfo> {
     const worktrees = await this.listWorktrees();
+    const repositoryRoot = await this.repositoryManager.getRepositoryRoot();
     
-    // First try to find by branch name
+    // 1. First try to find by branch name
     let sourceWorktree = worktrees.find(wt => wt.branch === sourceWorktreeName);
     
-    // If not found, try by directory name
+    // 2. If not found, try by absolute path
+    if (!sourceWorktree && isAbsolute(sourceWorktreeName)) {
+      sourceWorktree = worktrees.find(wt => wt.path === sourceWorktreeName);
+    }
+    
+    // 3. If not found, try by relative path
+    // For relative paths, we need to check against the parent directory of the repository
+    if (!sourceWorktree && (sourceWorktreeName.includes('/') || sourceWorktreeName.startsWith('.'))) {
+      // First, try resolving from repository root
+      const absolutePathFromRepo = resolve(repositoryRoot, sourceWorktreeName);
+      sourceWorktree = worktrees.find(wt => wt.path === absolutePathFromRepo);
+      
+      // If not found, try resolving from repository parent directory
+      // This handles cases where worktrees are siblings of the main repository
+      if (!sourceWorktree) {
+        const repoParent = dirname(repositoryRoot);
+        const absolutePathFromParent = resolve(repoParent, sourceWorktreeName);
+        sourceWorktree = worktrees.find(wt => wt.path === absolutePathFromParent);
+      }
+    }
+    
+    // 4. If not found, try by directory name
     if (!sourceWorktree) {
       sourceWorktree = worktrees.find(wt => 
         basename(wt.path) === sourceWorktreeName
       );
     }
     
-    // If still not found, fall back to main worktree
+    // 5. If still not found, fall back to main worktree
     if (!sourceWorktree) {
       sourceWorktree = worktrees.find(wt => wt.isMain);
     }
@@ -131,7 +153,7 @@ export class WorktreeManager {
     if (!sourceWorktree) {
       throw new Error(
         `Source worktree '${sourceWorktreeName}' not found. Available worktrees: ${
-          worktrees.map(wt => wt.branch).join(', ')
+          worktrees.map(wt => `${wt.branch} (${wt.path})`).join(', ')
         }`
       );
     }

@@ -206,7 +206,7 @@ describe('ConfigLoader', () => {
       
       expect(parsed).toHaveProperty('$schema');
       expect(parsed).toHaveProperty('sharedFiles');
-      expect(parsed).toHaveProperty('sourceWorktree', 'main');
+      expect(parsed).toHaveProperty('sourceWorktree', process.cwd());
       expect(parsed).toHaveProperty('linkMode', 'relative');
       expect(parsed).toHaveProperty('overwrite', false);
       expect(parsed).toHaveProperty('ignore');

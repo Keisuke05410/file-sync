@@ -111,7 +111,8 @@ npx sync-worktrees           # Sync files across worktrees
 npx sync-worktrees --dry-run # Preview changes without applying
 npx sync-worktrees --verbose # Show detailed output
 npx sync-worktrees --files "*.env,docker-compose.yml" # Sync specific files
-npx sync-worktrees --worktree feature # Sync to specific worktree
+npx sync-worktrees --worktree feature # Sync to specific worktree (by branch name)
+npx sync-worktrees --worktree /repo/feature # Sync to specific worktree (by path)
 npx sync-worktrees init      # Create sample configuration file
 npx sync-worktrees status    # Check synchronization status
 npx sync-worktrees unlink    # Remove symbolic links (intelligent mode)
@@ -145,7 +146,11 @@ npx sync-worktrees --help    # Show help information
 
 ### Configuration Options
 - **sharedFiles** (required): Array of file patterns to sync (glob patterns supported)
-- **sourceWorktree**: Name of the source worktree (default: "main")
+- **sourceWorktree**: Source worktree specified by:
+  - Branch name: `"main"`, `"develop"`, `"feature/auth"`
+  - Absolute path: `"/Users/user/projects/myrepo"`
+  - Relative path from repository root: `"./worktrees/feature"`, `"../myrepo-feature"`
+  - Default: `"main"`
 - **linkMode**: Type of symlinks - "relative" or "absolute" (default: "relative")
 - **overwrite**: Whether to overwrite existing files/links (default: false)
 - **ignore**: Array of patterns to exclude from syncing
@@ -160,6 +165,8 @@ npx sync-worktrees --help    # Show help information
 - **Doctor Command**: `npx sync-worktrees doctor [config-path]` - Diagnose configuration and worktree health
 - **Global Options**: `--dry-run`, `--verbose`, `--quiet`, `--no-color`
 - **Selective Sync Options**: `--files <patterns>`, `--worktree <name>` (for main command)
+  - `--files`: Comma-separated file patterns (e.g., "*.env,docker-compose.yml")
+  - `--worktree`: Worktree branch name (e.g., "feature") or path pattern (e.g., "/repo/feature")
 
 ## Git Integration Patterns
 

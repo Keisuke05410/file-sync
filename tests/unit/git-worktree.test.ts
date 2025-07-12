@@ -293,6 +293,52 @@ branch refs/heads/develop
         'Source worktree \'main\' not found'
       );
     });
+
+    it('should find source worktree by absolute path', async () => {
+      const result = await worktreeManager.getSourceWorktree('/path/to/develop');
+      
+      expect(result).toEqual({
+        path: '/path/to/develop',
+        branch: 'develop',
+        head: 'xyz789abc123',
+        isMain: false
+      });
+    });
+
+    it('should find source worktree by relative path', async () => {
+      const result = await worktreeManager.getSourceWorktree('./develop');
+      
+      expect(result).toEqual({
+        path: '/path/to/develop',
+        branch: 'develop',
+        head: 'xyz789abc123',
+        isMain: false
+      });
+    });
+
+    it('should find source worktree by parent-relative path', async () => {
+      // When worktrees are siblings (common pattern), use parent-relative paths
+      const result = await worktreeManager.getSourceWorktree('../develop');
+      
+      expect(result).toEqual({
+        path: '/path/to/develop',
+        branch: 'develop',
+        head: 'xyz789abc123',
+        isMain: false
+      });
+    });
+
+    it('should prioritize branch name over path matching', async () => {
+      // Even if 'main' could be interpreted as a path, it should match branch first
+      const result = await worktreeManager.getSourceWorktree('main');
+      
+      expect(result).toEqual({
+        path: '/path/to/main',
+        branch: 'main',
+        head: 'abc123def456',
+        isMain: true
+      });
+    });
   });
 
   describe('getTargetWorktrees', () => {
