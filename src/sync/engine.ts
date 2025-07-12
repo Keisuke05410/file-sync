@@ -1,4 +1,7 @@
 import { execSync } from 'child_process';
+import { existsSync } from 'fs';
+import { join } from 'path';
+import { glob } from 'glob';
 import type { Config, SyncPlan, SyncResult, SyncError, UnlinkResult, DoctorResult, SelectiveSync } from '../types/index.js';
 import { SyncPlanner } from './planner.js';
 import { SymlinkManager, FileSystemError } from './symlink.js';
@@ -273,12 +276,8 @@ export class SyncEngine {
       // Check if source worktree exists
       result.sourceWorktreeExists = plan.sourceWorktree !== undefined;
       
-      // Check for missing files (files that have skip action due to missing source)
-      const missingFiles = plan.syncActions
-        .filter(action => action.action === 'skip' && action.reason === 'Source file does not exist')
-        .map(action => action.file);
-      
-      result.missingFiles = [...new Set(missingFiles)];
+      // Check for missing files by directly validating configured file patterns
+      result.missingFiles = await this.checkMissingFiles(config, plan.sourceWorktree);
       
       // Check target worktrees accessibility and symlink status
       try {
@@ -333,5 +332,36 @@ export class SyncEngine {
     }
     
     return result;
+  }
+
+  async checkMissingFiles(config: Config, sourceWorktree: any): Promise<string[]> {
+    const missingFiles: string[] = [];
+    
+    for (const pattern of config.sharedFiles) {
+      // Check if pattern is a literal file (not a glob pattern)
+      if (!pattern.includes('*') && !pattern.includes('?') && !pattern.includes('[')) {
+        const filePath = join(sourceWorktree.path, pattern);
+        if (!existsSync(filePath)) {
+          missingFiles.push(pattern);
+        }
+      } else {
+        // For glob patterns, check if at least one file matches
+        try {
+          const matches = await glob(pattern, {
+            cwd: sourceWorktree.path,
+            nodir: true,
+            dot: true
+          });
+          if (matches.length === 0) {
+            missingFiles.push(pattern);
+          }
+        } catch {
+          // If glob fails, consider the pattern as missing
+          missingFiles.push(pattern);
+        }
+      }
+    }
+    
+    return missingFiles;
   }
 }

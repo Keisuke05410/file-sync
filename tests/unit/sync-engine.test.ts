@@ -884,6 +884,9 @@ describe('SyncEngine', () => {
         missing: []
       });
       
+      // Mock the checkMissingFiles method
+      const checkMissingFilesSpy = vi.spyOn(syncEngine, 'checkMissingFiles').mockResolvedValue([]);
+      
       const result = await syncEngine.doctor(mockConfig);
       
       expect(result.configValid).toBe(true);
@@ -893,6 +896,8 @@ describe('SyncEngine', () => {
       expect(result.brokenSymlinks).toHaveLength(0);
       expect(result.permissionIssues).toHaveLength(0);
       expect(result.recommendations).toHaveLength(0);
+      
+      checkMissingFilesSpy.mockRestore();
     });
 
     it('should detect missing files', async () => {
@@ -916,8 +921,11 @@ describe('SyncEngine', () => {
       mockSymlinkManager.validateSymlinks.mockResolvedValue({
         valid: [],
         broken: [],
-        missing: ['missing.txt']
+        missing: []
       });
+      
+      // Mock the checkMissingFiles method to return missing files
+      const checkMissingFilesSpy = vi.spyOn(syncEngine, 'checkMissingFiles').mockResolvedValue(['missing.txt']);
       
       const result = await syncEngine.doctor(mockConfig);
       
@@ -926,6 +934,8 @@ describe('SyncEngine', () => {
       expect(result.targetWorktreesAccessible).toBe(true);
       expect(result.missingFiles).toContain('missing.txt');
       expect(result.recommendations).toContain('Remove missing.txt from sharedFiles or create the file in source worktree');
+      
+      checkMissingFilesSpy.mockRestore();
     });
 
     it('should detect broken symlinks', async () => {
@@ -942,6 +952,9 @@ describe('SyncEngine', () => {
         missing: []
       });
       
+      // Mock the checkMissingFiles method
+      const checkMissingFilesSpy = vi.spyOn(syncEngine, 'checkMissingFiles').mockResolvedValue([]);
+      
       const result = await syncEngine.doctor(mockConfig);
       
       expect(result.configValid).toBe(true);
@@ -949,6 +962,8 @@ describe('SyncEngine', () => {
       expect(result.targetWorktreesAccessible).toBe(true);
       expect(result.brokenSymlinks).toContain('broken-link.txt');
       expect(result.recommendations).toContain('Run sync-worktrees clean to remove broken symlinks');
+      
+      checkMissingFilesSpy.mockRestore();
     });
 
     it('should detect configuration validation errors', async () => {
@@ -975,12 +990,17 @@ describe('SyncEngine', () => {
       mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
       mockSymlinkManager.validateSymlinks.mockRejectedValue(new Error('ENOENT: no such file or directory'));
       
+      // Mock the checkMissingFiles method
+      const checkMissingFilesSpy = vi.spyOn(syncEngine, 'checkMissingFiles').mockResolvedValue([]);
+      
       const result = await syncEngine.doctor(mockConfig);
       
       expect(result.configValid).toBe(true);
       expect(result.sourceWorktreeExists).toBe(true);
       expect(result.targetWorktreesAccessible).toBe(false);
       expect(result.recommendations).toContain('Check target worktrees accessibility');
+      
+      checkMissingFilesSpy.mockRestore();
     });
 
     it('should detect permission issues', async () => {
@@ -993,6 +1013,9 @@ describe('SyncEngine', () => {
       mockPlanner.createSyncPlan.mockResolvedValue(mockPlan);
       mockSymlinkManager.validateSymlinks.mockRejectedValue(new Error('EACCES: permission denied'));
       
+      // Mock the checkMissingFiles method
+      const checkMissingFilesSpy = vi.spyOn(syncEngine, 'checkMissingFiles').mockResolvedValue([]);
+      
       const result = await syncEngine.doctor(mockConfig);
       
       expect(result.configValid).toBe(true);
@@ -1000,6 +1023,8 @@ describe('SyncEngine', () => {
       expect(result.targetWorktreesAccessible).toBe(false);
       expect(result.permissionIssues).toHaveLength(1);
       expect(result.recommendations).toContain('Check file permissions for worktree operations');
+      
+      checkMissingFilesSpy.mockRestore();
     });
 
     it('should handle multiple issues', async () => {
@@ -1026,6 +1051,9 @@ describe('SyncEngine', () => {
         missing: ['missing.txt']
       });
       
+      // Mock the checkMissingFiles method to return missing files
+      const checkMissingFilesSpy = vi.spyOn(syncEngine, 'checkMissingFiles').mockResolvedValue(['missing.txt']);
+      
       const result = await syncEngine.doctor(mockConfig);
       
       expect(result.configValid).toBe(true);
@@ -1034,6 +1062,8 @@ describe('SyncEngine', () => {
       expect(result.missingFiles).toContain('missing.txt');
       expect(result.brokenSymlinks).toContain('broken-link.txt');
       expect(result.recommendations).toHaveLength(2);
+      
+      checkMissingFilesSpy.mockRestore();
     });
 
     it('should handle doctor method errors', async () => {
