@@ -295,6 +295,75 @@ describe('SyncPlanner', () => {
       expect(capturedFiles).toEqual(['.worktreesync.json', 'user-file.txt', '.worktreesync.json', 'user-file.txt']);
       expect(mockSymlinkManager.createSyncAction).toHaveBeenCalledTimes(4); // 2 files × 2 worktrees
     });
+
+    it('should recognize directory pattern with trailing slash', async () => {
+      mockWorktreeManager.getSourceWorktree.mockResolvedValue(mockSourceWorktree);
+      mockWorktreeManager.getTargetWorktrees.mockResolvedValue(mockTargetWorktrees);
+      
+      // Mock glob to return the directory without trailing slash
+      mockGlob.mockResolvedValue(['test-dir']);
+      
+      // Don't add isDirectory in mock - let the real implementation handle it
+      mockSymlinkManager.createSyncAction.mockImplementation(async (source, target, file, linkMode, overwrite) => {
+        const action: SyncAction = {
+          targetWorktree: target.path,
+          file,
+          sourcePath: `${source.path}/${file}`,
+          targetPath: `${target.path}/${file}`,
+          linkPath: `../${source.branch}/${file}`,
+          action: 'create' as const
+          // Note: isDirectory should be set by the planner, not the symlink manager
+        };
+        return action;
+      });
+      
+      const config: Config = {
+        ...mockConfig,
+        sharedFiles: ['test-dir/'] // Directory pattern with trailing slash
+      };
+      
+      const plan = await syncPlanner.createSyncPlan(config);
+      
+      // Should recognize the directory pattern
+      const dirActions = plan.syncActions.filter(a => a.file === 'test-dir');
+      expect(dirActions.length).toBeGreaterThan(0);
+      
+      // Check that isDirectory property exists and is true
+      const action = dirActions[0] as any;
+      expect(action.isDirectory).toBeDefined();
+      expect(action.isDirectory).toBe(true);
+    });
+
+    it('should find directories when pattern ends with slash', async () => {
+      mockWorktreeManager.getSourceWorktree.mockResolvedValue(mockSourceWorktree);
+      mockWorktreeManager.getTargetWorktrees.mockResolvedValue(mockTargetWorktrees);
+      
+      // Mock glob to return directories when nodir is false
+      mockGlob.mockResolvedValueOnce(['test-dir']);
+      
+      mockSymlinkManager.createSyncAction.mockImplementation(async (source, target, file) => ({
+        targetWorktree: target.path,
+        file,
+        sourcePath: `${source.path}/${file}`,
+        targetPath: `${target.path}/${file}`,
+        linkPath: `../${source.branch}/${file}`,
+        action: 'create' as const
+      }));
+      
+      const config: Config = {
+        ...mockConfig,
+        sharedFiles: ['test-dir/'] // Directory pattern with trailing slash
+      };
+      
+      await syncPlanner.createSyncPlan(config);
+      
+      // Should call glob with nodir: false for directory patterns
+      expect(mockGlob).toHaveBeenCalledWith('test-dir', {
+        cwd: '/repo/main',
+        nodir: false,  // Should allow directories
+        dot: true
+      });
+    });
   });
 
   describe('validatePlan', () => {

@@ -363,7 +363,7 @@ describe('SymlinkManager', () => {
 
     it('should skip when regular file exists and overwrite is false', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockLstatSync.mockReturnValue({ isSymbolicLink: () => false } as any);
+      mockLstatSync.mockReturnValue({ isSymbolicLink: () => false, isDirectory: () => false } as any);
       
       const action = await symlinkManager.createSyncAction(
         sourceWorktree,
@@ -379,7 +379,7 @@ describe('SymlinkManager', () => {
 
     it('should update when regular file exists and overwrite is true', async () => {
       mockExistsSync.mockReturnValue(true);
-      mockLstatSync.mockReturnValue({ isSymbolicLink: () => false } as any);
+      mockLstatSync.mockReturnValue({ isSymbolicLink: () => false, isDirectory: () => false } as any);
       
       const action = await symlinkManager.createSyncAction(
         sourceWorktree,
@@ -407,6 +407,27 @@ describe('SymlinkManager', () => {
       );
       
       expect(action.linkPath).toBe('/source/file.txt');
+    });
+
+    it('should handle existing directory when creating directory symlink', async () => {
+      // Source directory exists
+      mockExistsSync
+        .mockReturnValueOnce(true)  // source exists
+        .mockReturnValueOnce(true); // target directory already exists
+      
+      // Target is a directory (not a symlink)
+      mockLstatSync.mockReturnValue({ isDirectory: () => true, isSymbolicLink: () => false } as any);
+      
+      const action = await symlinkManager.createSyncAction(
+        sourceWorktree,
+        targetWorktree,
+        'test-dir',
+        'relative',
+        false  // overwrite=false
+      );
+      
+      expect(action.action).toBe('skip');
+      expect(action.reason).toContain('directory exists');
     });
   });
 
@@ -504,6 +525,28 @@ describe('SymlinkManager', () => {
       await symlinkManager.executeAction(action, false);
       
       expect(mockSymlinkSync).toHaveBeenCalledWith('/source/file.txt', '/target/file.txt');
+    });
+
+    it('should create directory symlink for directory action', async () => {
+      mockMkdir.mockResolvedValue(undefined);
+      mockExistsSync.mockReturnValue(false);
+      mockSymlinkSync.mockImplementation(() => {}); // Mock successful symlink creation
+      
+      const action = {
+        targetWorktree: '/target',
+        file: 'test-dir',
+        sourcePath: '/source/test-dir',
+        targetPath: '/target/test-dir',
+        linkPath: '../source/test-dir',
+        action: 'create' as const,
+        reason: 'Creating new symlink',
+        isDirectory: true  // This marks it as a directory
+      };
+      
+      await symlinkManager.executeAction(action, false);
+      
+      // Should call symlinkSync with 'dir' type for directories
+      expect(mockSymlinkSync).toHaveBeenCalledWith('../source/test-dir', '/target/test-dir', 'dir');
     });
   });
 

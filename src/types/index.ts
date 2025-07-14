@@ -23,6 +23,7 @@ export interface SyncAction {
   linkPath: string;
   action: 'create' | 'update' | 'skip';
   reason?: string;
+  isDirectory?: boolean;
 }
 
 export interface SyncResult {

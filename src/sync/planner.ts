@@ -59,6 +59,11 @@ export class SyncPlanner {
           config.overwrite
         );
         
+        // Check if this was a directory pattern
+        if (this.isDirectoryPattern(filePatterns, file)) {
+          action.isDirectory = true;
+        }
+        
         syncActions.push(action);
       }
     }
@@ -78,11 +83,16 @@ export class SyncPlanner {
     const allFiles: string[] = [];
 
     for (const pattern of patterns) {
-      const files = await glob(pattern, {
+      // Remove trailing slash for glob matching
+      const cleanPattern = this.cleanDirectoryPattern(pattern);
+      const isDirectoryPattern = pattern.endsWith('/');
+      
+      const files = await glob(cleanPattern, {
         cwd: sourceWorktree.path,
-        nodir: true,
+        nodir: !isDirectoryPattern, // Allow directories for directory patterns
         dot: true
       });
+      
       
       allFiles.push(...files);
     }
@@ -108,6 +118,20 @@ export class SyncPlanner {
     return files.includes(SyncPlanner.CONFIG_FILE_NAME) 
       ? files 
       : [SyncPlanner.CONFIG_FILE_NAME, ...files];
+  }
+
+  /**
+   * Checks if a file was matched by a directory pattern (ending with /)
+   */
+  private isDirectoryPattern(patterns: string[], file: string): boolean {
+    return patterns.some(pattern => pattern.endsWith('/') && pattern.slice(0, -1) === file);
+  }
+
+  /**
+   * Removes trailing slash from directory patterns for glob matching
+   */
+  private cleanDirectoryPattern(pattern: string): string {
+    return pattern.endsWith('/') ? pattern.slice(0, -1) : pattern;
   }
 
   async validatePlan(plan: SyncPlan): Promise<{

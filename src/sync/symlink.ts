@@ -52,6 +52,41 @@ export class SymlinkManager {
     }
   }
 
+  async createDirectorySymlink(
+    sourcePath: string,
+    targetPath: string,
+    linkMode: 'relative' | 'absolute' = 'relative'
+  ): Promise<void> {
+    try {
+      // Ensure target directory exists
+      const targetDir = dirname(targetPath);
+      await mkdir(targetDir, { recursive: true });
+
+      // Calculate link path
+      const linkPath = linkMode === 'relative' 
+        ? relative(targetDir, sourcePath)
+        : sourcePath;
+
+      // Remove existing file/link if it exists
+      if (existsSync(targetPath)) {
+        await this.removeExisting(targetPath);
+      }
+
+      // Create the directory symlink with 'dir' type
+      symlinkSync(linkPath, targetPath, 'dir');
+      
+    } catch (error: unknown) {
+      const code = (error as NodeJS.ErrnoException).code || 'UNKNOWN';
+      const message = error instanceof Error ? error.message : String(error);
+      throw new FileSystemError(
+        `Failed to create directory symlink from ${sourcePath} to ${targetPath}: ${message}`,
+        targetPath,
+        'createDirectorySymlink',
+        code
+      );
+    }
+  }
+
   async removeExisting(path: string): Promise<void> {
     try {
       const stats = lstatSync(path);
@@ -184,8 +219,12 @@ export class SymlinkManager {
           };
         }
       } else {
-        // Regular file exists
+        // Regular file or directory exists
+        const isDirectory = stats.isDirectory();
         if (!overwrite) {
+          const reason = isDirectory 
+            ? 'Target directory exists and overwrite is disabled'
+            : 'Target file exists and overwrite is disabled';
           return {
             targetWorktree: targetWorktree.path,
             file: relativeFilePath,
@@ -193,9 +232,12 @@ export class SymlinkManager {
             targetPath,
             linkPath,
             action: 'skip',
-            reason: 'Target file exists and overwrite is disabled'
+            reason
           };
         } else {
+          const reason = isDirectory
+            ? 'Overwriting existing directory'
+            : 'Overwriting existing file';
           return {
             targetWorktree: targetWorktree.path,
             file: relativeFilePath,
@@ -203,7 +245,7 @@ export class SymlinkManager {
             targetPath,
             linkPath,
             action: 'update',
-            reason: 'Overwriting existing file'
+            reason
           };
         }
       }
@@ -242,7 +284,12 @@ export class SymlinkManager {
       // Determine link mode from the action's linkPath
       const linkMode = resolve(action.linkPath) === action.linkPath ? 'absolute' : 'relative';
       
-      await this.createSymlink(action.sourcePath, action.targetPath, linkMode);
+      // Check if this is a directory action
+      if (action.isDirectory) {
+        await this.createDirectorySymlink(action.sourcePath, action.targetPath, linkMode);
+      } else {
+        await this.createSymlink(action.sourcePath, action.targetPath, linkMode);
+      }
       
     } catch (error) {
       if (error instanceof FileSystemError) {
