@@ -53,7 +53,20 @@ export class ConfigLoader {
     }
   }
 
-  private async resolveConfigPath(configPath?: string): Promise<string> {
+  private async resolveConfigPath(configPath?: string, forInit?: boolean): Promise<string> {
+    if (forInit) {
+      // For init command, resolve relative to current working directory
+      const currentWorkingDir = process.cwd();
+      
+      if (configPath) {
+        // If path is absolute, use as-is, otherwise resolve relative to current directory
+        return resolve(currentWorkingDir, configPath);
+      }
+      
+      return resolve(currentWorkingDir, ConfigLoader.DEFAULT_CONFIG_FILE);
+    }
+    
+    // For other commands, resolve relative to repository root
     const repositoryRoot = await this.repositoryManager.getRepositoryRoot();
     
     if (configPath) {
@@ -92,7 +105,7 @@ export class ConfigLoader {
   }
 
   async createSampleConfigFile(configPath?: string): Promise<string> {
-    const resolvedPath = await this.resolveConfigPath(configPath);
+    const resolvedPath = await this.resolveConfigPath(configPath, true);
     const sampleContent = await this.generateSampleConfig();
     
     if (existsSync(resolvedPath)) {

@@ -5,7 +5,7 @@
     ".env.local",
     ".vscode/settings.json"
   ],
-  "sourceWorktree": "main",
+  "sourceWorktree": "/Users/k.kaji/src/github.com/Keisuke05410/file-sync",
   "linkMode": "relative",
   "overwrite": false,
   "ignore": [

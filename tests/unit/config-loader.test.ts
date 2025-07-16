@@ -258,55 +258,83 @@ describe('ConfigLoader', () => {
   });
 
   describe('createSampleConfigFile', () => {
-    it('should create sample config file at default path', async () => {
+    it('should create sample config file at default path in current directory for init', async () => {
       mockExistsSync.mockReturnValue(false);
       mockWriteFile.mockResolvedValue(undefined);
+      
+      // Mock process.cwd() for the test
+      const originalCwd = process.cwd;
+      process.cwd = vi.fn().mockReturnValue('/current/working/dir');
       
       const result = await configLoader.createSampleConfigFile();
       
-      expect(mockExistsSync).toHaveBeenCalledWith('/repo/root/.worktreesync.json');
+      expect(mockExistsSync).toHaveBeenCalledWith('/current/working/dir/.worktreesync.json');
       expect(mockWriteFile).toHaveBeenCalledWith(
-        '/repo/root/.worktreesync.json',
+        '/current/working/dir/.worktreesync.json',
         expect.stringContaining('"sharedFiles"'),
         'utf-8'
       );
-      expect(result).toBe('/repo/root/.worktreesync.json');
+      expect(result).toBe('/current/working/dir/.worktreesync.json');
+      
+      // Restore original process.cwd
+      process.cwd = originalCwd;
     });
 
-    it('should create sample config file at custom path', async () => {
+    it('should create sample config file at custom path in current directory for init', async () => {
       mockExistsSync.mockReturnValue(false);
       mockWriteFile.mockResolvedValue(undefined);
       
+      // Mock process.cwd() for the test
+      const originalCwd = process.cwd;
+      process.cwd = vi.fn().mockReturnValue('/current/working/dir');
+      
       const result = await configLoader.createSampleConfigFile('custom.json');
       
-      expect(mockExistsSync).toHaveBeenCalledWith('/repo/root/custom.json');
+      expect(mockExistsSync).toHaveBeenCalledWith('/current/working/dir/custom.json');
       expect(mockWriteFile).toHaveBeenCalledWith(
-        '/repo/root/custom.json',
+        '/current/working/dir/custom.json',
         expect.stringContaining('"sharedFiles"'),
         'utf-8'
       );
-      expect(result).toBe('/repo/root/custom.json');
+      expect(result).toBe('/current/working/dir/custom.json');
+      
+      // Restore original process.cwd
+      process.cwd = originalCwd;
     });
 
     it('should throw ConfigError when file already exists', async () => {
       mockExistsSync.mockReturnValue(true);
       
+      // Mock process.cwd() for the test
+      const originalCwd = process.cwd;
+      process.cwd = vi.fn().mockReturnValue('/current/working/dir');
+      
       await expect(configLoader.createSampleConfigFile()).rejects.toThrow(ConfigError);
       await expect(configLoader.createSampleConfigFile()).rejects.toThrow(
-        'Configuration file already exists: /repo/root/.worktreesync.json'
+        'Configuration file already exists: /current/working/dir/.worktreesync.json'
       );
       
       expect(mockWriteFile).not.toHaveBeenCalled();
+      
+      // Restore original process.cwd
+      process.cwd = originalCwd;
     });
 
     it('should throw ConfigError when file creation fails', async () => {
       mockExistsSync.mockReturnValue(false);
       mockWriteFile.mockRejectedValue(new Error('Permission denied'));
       
+      // Mock process.cwd() for the test
+      const originalCwd = process.cwd;
+      process.cwd = vi.fn().mockReturnValue('/current/working/dir');
+      
       await expect(configLoader.createSampleConfigFile()).rejects.toThrow(ConfigError);
       await expect(configLoader.createSampleConfigFile()).rejects.toThrow(
         'Failed to create configuration file: Error: Permission denied'
       );
+      
+      // Restore original process.cwd
+      process.cwd = originalCwd;
     });
 
     it('should write valid JSON content', async () => {
@@ -414,7 +442,7 @@ describe('ConfigLoader', () => {
   });
 
   describe('resolveConfigPath', () => {
-    it('should resolve relative path against repository root', async () => {
+    it('should resolve relative path against repository root when not for init', async () => {
       // Use reflection to access private method for testing
       const resolveConfigPath = (configLoader as any).resolveConfigPath.bind(configLoader);
       
@@ -423,6 +451,23 @@ describe('ConfigLoader', () => {
       expect(mockRepositoryManager.getRepositoryRoot).toHaveBeenCalled();
       expect(mockResolve).toHaveBeenCalledWith('/repo/root', 'custom.json');
       expect(result).toBe('/repo/root/custom.json');
+    });
+
+    it('should resolve relative path against current working directory when for init', async () => {
+      const resolveConfigPath = (configLoader as any).resolveConfigPath.bind(configLoader);
+      
+      // Mock process.cwd() for the test
+      const originalCwd = process.cwd;
+      process.cwd = vi.fn().mockReturnValue('/current/working/dir');
+      
+      const result = await resolveConfigPath('custom.json', true);
+      
+      expect(mockRepositoryManager.getRepositoryRoot).not.toHaveBeenCalled();
+      expect(mockResolve).toHaveBeenCalledWith('/current/working/dir', 'custom.json');
+      expect(result).toBe('/current/working/dir/custom.json');
+      
+      // Restore original process.cwd
+      process.cwd = originalCwd;
     });
 
     it('should resolve absolute path correctly', async () => {
@@ -434,6 +479,22 @@ describe('ConfigLoader', () => {
       expect(result).toBe('/repo/root//absolute/path/config.json');
     });
 
+    it('should resolve absolute path correctly when for init', async () => {
+      const resolveConfigPath = (configLoader as any).resolveConfigPath.bind(configLoader);
+      
+      // Mock process.cwd() for the test
+      const originalCwd = process.cwd;
+      process.cwd = vi.fn().mockReturnValue('/current/working/dir');
+      
+      const result = await resolveConfigPath('/absolute/path/config.json', true);
+      
+      expect(mockResolve).toHaveBeenCalledWith('/current/working/dir', '/absolute/path/config.json');
+      expect(result).toBe('/current/working/dir//absolute/path/config.json');
+      
+      // Restore original process.cwd
+      process.cwd = originalCwd;
+    });
+
     it('should use default file name when no path provided', async () => {
       const resolveConfigPath = (configLoader as any).resolveConfigPath.bind(configLoader);
       
@@ -441,6 +502,22 @@ describe('ConfigLoader', () => {
       
       expect(mockResolve).toHaveBeenCalledWith('/repo/root', '.worktreesync.json');
       expect(result).toBe('/repo/root/.worktreesync.json');
+    });
+
+    it('should use default file name in current directory when for init', async () => {
+      const resolveConfigPath = (configLoader as any).resolveConfigPath.bind(configLoader);
+      
+      // Mock process.cwd() for the test
+      const originalCwd = process.cwd;
+      process.cwd = vi.fn().mockReturnValue('/current/working/dir');
+      
+      const result = await resolveConfigPath(undefined, true);
+      
+      expect(mockResolve).toHaveBeenCalledWith('/current/working/dir', '.worktreesync.json');
+      expect(result).toBe('/current/working/dir/.worktreesync.json');
+      
+      // Restore original process.cwd
+      process.cwd = originalCwd;
     });
   });
 });
